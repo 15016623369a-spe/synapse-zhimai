@@ -46,10 +46,41 @@ jobs:
         working-directory: frontend
 
   docker:
-    name: Docker image
+    name: Docker image & runtime smoke
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: [backend, frontend]
     steps:
       - uses: actions/checkout@v4
       - name: Build image
         run: docker build -t synapse:ci .
+      - name: Run container smoke test
+        run: |
+          set -euo pipefail
+          cleanup() { docker rm -f synapse-ci >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          docker run -d --name synapse-ci -p 127.0.0.1:7800:7800 synapse:ci
+          for i in $(seq 1 60); do
+            if curl -fsS --max-time 3 http://127.0.0.1:7800/api/health > /tmp/synapse-health.json; then
+              break
+            fi
+            if [ "$i" -eq 60 ]; then
+              echo "Container did not become healthy"; docker ps -a; docker logs synapse-ci; exit 1
+            fi
+            sleep 2
+          done
+          echo "health response:"; cat /tmp/synapse-health.json; echo
+          python3 - <<'PY'
+          import json
+          import urllib.request
+
+          base = "http://127.0.0.1:7800"
+          health = json.load(urllib.request.urlopen(base + "/api/health", timeout=10))
+          assert health["status"] == "ok", health
+          assert health["documents"] >= 16, health
+          assert health["chunks"] > 0, health
+          docs = json.load(urllib.request.urlopen(base + "/api/documents", timeout=10))
+          assert docs["total"] >= 16, docs["total"]
+          print("health:", health)
+          print("documents:", docs["total"], "chunks:", health["chunks"])
+          PY
