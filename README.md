@@ -7,6 +7,9 @@
 基于文档的 AI 助手 · RAG 问答与引用溯源 · 神经元式个人知识图谱
 自托管 · 中文优先 · 无需 API Key 也能离线运行
 
+[![CI](https://github.com/15016623369a-spe/synapse-zhimai/actions/workflows/ci.yml/badge.svg)](https://github.com/15016623369a-spe/synapse-zhimai/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/15016623369a-spe/synapse-zhimai?display_name=release)](https://github.com/15016623369a-spe/synapse-zhimai/releases)
+
+
 </div>
 
 ---
@@ -398,6 +401,9 @@ Synapse 的灵感来自 [DocsGPT](https://github.com/arc53/DocsGPT)：同样把�
 - **v1.2（2026-11-16）**：新增**分区知识图谱**——用户可自建分区、批量归档文档；分区模式按区生成互相隔离的 3D 知识岛，支持全部区域 / 单区隔离、重命名、删除（文档保留）、知识库卡片显示分区。SQLite 幂等迁移，旧数据全保留。
 
 ## 开源发布
+
+- **Release Notes**：[v1.0.0](docs/RELEASE_NOTES_v1.0.0.md)
+- **GHCR 镜像（tag 发布后）**：`ghcr.io/15016623369a-spe/synapse-zhimai:latest`
 
 - **GitHub 仓库**：[synapse-zhimai](https://github.com/15016623369a-spe/synapse-zhimai)
 - **License**：MIT（见 [LICENSE](LICENSE)）

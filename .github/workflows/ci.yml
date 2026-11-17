@@ -48,28 +48,39 @@ jobs:
   docker:
     name: Docker image & runtime smoke
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     needs: [backend, frontend]
     steps:
       - uses: actions/checkout@v4
       - name: Build image
         run: docker build -t synapse:ci .
-      - name: Run container smoke test
+      - name: Run container smoke test + volume persistence
         run: |
           set -euo pipefail
-          cleanup() { docker rm -f synapse-ci >/dev/null 2>&1 || true; }
+          cleanup() {
+            docker rm -f synapse-ci >/dev/null 2>&1 || true
+            docker volume rm synapse-ci-data >/dev/null 2>&1 || true
+          }
           trap cleanup EXIT
-          docker run -d --name synapse-ci -p 127.0.0.1:7800:7800 synapse:ci
-          for i in $(seq 1 60); do
-            if curl -fsS --max-time 3 http://127.0.0.1:7800/api/health > /tmp/synapse-health.json; then
-              break
-            fi
-            if [ "$i" -eq 60 ]; then
-              echo "Container did not become healthy"; docker ps -a; docker logs synapse-ci; exit 1
-            fi
-            sleep 2
-          done
+
+          wait_healthy() {
+            for i in $(seq 1 60); do
+              if curl -fsS --max-time 3 http://127.0.0.1:7800/api/health > /tmp/synapse-health.json; then
+                return 0
+              fi
+              sleep 2
+            done
+            echo "Container did not become healthy"
+            docker ps -a
+            docker logs synapse-ci
+            return 1
+          }
+
+          docker volume create synapse-ci-data
+          docker run -d --name synapse-ci -p 127.0.0.1:7800:7800             -v synapse-ci-data:/app/data synapse:ci
+          wait_healthy
           echo "health response:"; cat /tmp/synapse-health.json; echo
+
           python3 - <<'PY'
           import json
           import urllib.request
@@ -81,6 +92,29 @@ jobs:
           assert health["chunks"] > 0, health
           docs = json.load(urllib.request.urlopen(base + "/api/documents", timeout=10))
           assert docs["total"] >= 16, docs["total"]
-          print("health:", health)
-          print("documents:", docs["total"], "chunks:", health["chunks"])
+          print("initial health:", health)
+          print("initial documents:", docs["total"])
+          PY
+
+          # 写入一条 CI 专用笔记，重启容器后必须仍然存在，证明命名卷持久化
+          curl -fsS -X POST http://127.0.0.1:7800/api/documents/text             -H 'Content-Type: application/json'             -d '{"title":"CI persistence note","content":"This note proves the named Docker volume survives a restart.","tags":["ci"],"source_type":"note"}'
+          echo
+          docker rm -f synapse-ci
+          docker run -d --name synapse-ci -p 127.0.0.1:7800:7800             -v synapse-ci-data:/app/data synapse:ci
+          wait_healthy
+
+          python3 - <<'PY'
+          import json
+          import urllib.request
+
+          base = "http://127.0.0.1:7800"
+          health = json.load(urllib.request.urlopen(base + "/api/health", timeout=10))
+          docs = json.load(urllib.request.urlopen(base + "/api/documents", timeout=10))
+          titles = [item.get("title") for item in docs.get("items", [])]
+          assert health["status"] == "ok", health
+          assert docs["total"] >= 17, docs
+          assert "CI persistence note" in titles, titles
+          print("after restart health:", health)
+          print("after restart documents:", docs["total"])
+          print("persistence note present:", "CI persistence note" in titles)
           PY

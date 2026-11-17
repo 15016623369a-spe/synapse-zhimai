@@ -52,6 +52,25 @@ own machine. This is **not** a multi-user SaaS product.
 - [ ] Consider GitHub secret scanning / Dependabot.
 - [ ] Review third-party licenses and search/LLM provider terms.
 
+## Release automation
+
+- CI: `.github/workflows/ci.yml` — backend/frontend/Docker runtime + named-volume persistence.
+- Tag `v*` triggers `.github/workflows/publish.yml`:
+  - builds/pushes `ghcr.io/15016623369a-spe/synapse-zhimai:<tag>` and `:latest`;
+  - creates a GitHub Release with `docs/RELEASE_NOTES_v1.0.0.md`.
+- Publish flow:
+  ```bash
+  git push origin main
+  git push origin v1.0.0
+  ```
+- Repository topics (once, requires `gh auth login`):
+  ```bash
+  gh repo edit 15016623369a-spe/synapse-zhimai \
+    --add-topic rag --add-topic knowledge-base --add-topic knowledge-graph \
+    --add-topic threejs --add-topic fastapi --add-topic react --add-topic mcp \
+    --add-topic llm --add-topic self-hosted --add-topic chinese
+  ```
+
 ## Explicit non-goals of this release
 
 - No authentication, multi-tenancy, or team permissions.
