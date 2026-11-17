@@ -1,0 +1,349 @@
+/* ============================================================================
+   知识库智能整理（Enrichment）卡片
+   ========================================================================== */
+
+.enrich-card .settings-card-icon.violet {
+  color: var(--violet);
+  background: rgba(167, 139, 250, 0.1);
+  border-color: rgba(167, 139, 250, 0.2);
+}
+
+.enrich-body {
+  gap: 10px;
+}
+
+.enrich-loading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  color: var(--dim);
+  padding: 6px 0;
+}
+
+.enrich-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  border-radius: 11px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--border);
+}
+
+.enrich-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  background: rgba(10, 16, 28, 0.72);
+  min-width: 0;
+}
+
+.enrich-stat-value {
+  font-size: 18px;
+  font-weight: 660;
+  color: #f0f9ff;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.enrich-stat-total {
+  font-size: 11px;
+  color: var(--dim);
+  font-weight: 500;
+}
+
+.enrich-stat-label {
+  font-size: 10px;
+  color: var(--dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.enrich-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  width: fit-content;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(167, 139, 250, 0.28);
+  background: rgba(167, 139, 250, 0.1);
+  color: #c9b6ff;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.enrich-mode-badge.local {
+  border-color: rgba(251, 191, 36, 0.26);
+  background: rgba(251, 191, 36, 0.07);
+  color: #e8c887;
+}
+
+.enrich-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: 1px dashed var(--border);
+  background: rgba(120, 190, 255, 0.025);
+  font-size: 10.5px;
+  line-height: 1.6;
+  color: var(--dim);
+}
+
+.enrich-hint svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--violet);
+}
+
+.enrich-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.enrich-btn-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  font-size: 9px;
+  font-family: var(--font-mono);
+}
+
+.enrich-limit-hint {
+  font-size: 9.5px;
+  color: var(--dim);
+  margin-left: auto;
+}
+
+.enrich-progress {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(79, 216, 255, 0.22);
+  background: rgba(79, 216, 255, 0.04);
+}
+
+.enrich-progress > svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--cyan);
+}
+
+.enrich-progress-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #dff5ff;
+}
+
+.enrich-progress-desc {
+  margin-top: 2px;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--dim);
+}
+
+.enrich-run-error {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: 1px solid rgba(251, 113, 133, 0.26);
+  background: rgba(251, 113, 133, 0.05);
+  color: #f5b8c2;
+  font-size: 10.5px;
+}
+
+.enrich-run-error svg {
+  flex-shrink: 0;
+}
+
+.enrich-run-error span {
+  flex: 1;
+  min-width: 0;
+}
+
+.enrich-result {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 11px 12px;
+  border-radius: 11px;
+  border: 1px solid rgba(52, 211, 153, 0.24);
+  background: rgba(52, 211, 153, 0.04);
+}
+
+.enrich-result-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+
+.enrich-result-icon {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--mint);
+  background: rgba(52, 211, 153, 0.1);
+  border: 1px solid rgba(52, 211, 153, 0.2);
+}
+
+.enrich-result-title {
+  font-size: 12px;
+  font-weight: 620;
+  color: #a9ecd0;
+}
+
+.enrich-result-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--dim);
+}
+
+.enrich-result-meta b {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.enrich-dot {
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: var(--dim);
+  opacity: 0.6;
+}
+
+.enrich-updated-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-left: 35px;
+}
+
+.enrich-updated-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.enrich-updated-title {
+  font-size: 11px;
+  font-weight: 560;
+  color: #dff6ea;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.enrich-keyword-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.enrich-keyword-chip {
+  display: inline-flex;
+  max-width: 100%;
+  padding: 2px 6px;
+  border-radius: 5px;
+  border: 1px solid rgba(251, 191, 36, 0.22);
+  background: rgba(251, 191, 36, 0.06);
+  color: #e8c887;
+  font-size: 9px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.enrich-keyword-more {
+  font-size: 9px;
+  color: var(--dim);
+  align-self: center;
+}
+
+.enrich-more-hint {
+  font-size: 9.5px;
+  color: var(--dim);
+}
+
+.enrich-reason-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-left: 35px;
+}
+
+.enrich-reason {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  font-size: 9.5px;
+  line-height: 1.5;
+  color: var(--dim);
+}
+
+.enrich-reason svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--amber);
+}
+
+.enrich-refresh-hint {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(52, 211, 153, 0.18);
+  font-size: 9.5px;
+  color: var(--dim);
+}
+
+.enrich-done-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: 1px solid rgba(52, 211, 153, 0.18);
+  background: rgba(52, 211, 153, 0.035);
+  color: #9be8c6;
+  font-size: 10.5px;
+}
+
+@media (max-width: 860px) {
+  .enrich-stat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .enrich-limit-hint {
+    margin-left: 0;
+  }
+
+  .enrich-updated-list,
+  .enrich-reason-list {
+    padding-left: 0;
+  }
+}

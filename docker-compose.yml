@@ -1,0 +1,30 @@
+services:
+  synapse:
+    build: .
+    image: synapse-knowledge:local
+    container_name: synapse
+    ports:
+      # 只绑定本机；如需局域网访问，请先阅读 SECURITY.md 并加认证/反向代理
+      - "127.0.0.1:${SYNAPSE_PORT:-7800}:7800"
+    environment:
+      SYNAPSE_DATA_DIR: /app/data
+      SYNAPSE_LLM_BASE_URL: ${SYNAPSE_LLM_BASE_URL:-}
+      SYNAPSE_LLM_API_KEY: ${SYNAPSE_LLM_API_KEY:-}
+      SYNAPSE_LLM_MODEL: ${SYNAPSE_LLM_MODEL:-deepseek-chat}
+      SYNAPSE_LLM_TEMPERATURE: ${SYNAPSE_LLM_TEMPERATURE:-0.2}
+      SYNAPSE_SEARCH_PROVIDER: ${SYNAPSE_SEARCH_PROVIDER:-bing}
+      SYNAPSE_SEARXNG_URL: ${SYNAPSE_SEARXNG_URL:-}
+      SYNAPSE_OCR_MAX_PAGES: ${SYNAPSE_OCR_MAX_PAGES:-30}
+    volumes:
+      # 数据/索引/设置/计划都在这个命名卷里；不要放进 git
+      - synapse-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:7800/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  synapse-data:

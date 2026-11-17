@@ -1,0 +1,16 @@
+.git
+.github
+.env
+backend/.venv
+frontend/node_modules
+frontend/dist
+frontend/.verify-dist
+data/synapse.db
+data/synapse.db-*
+data/backups
+data/uploads
+.cache
+tmp
+test-reports
+*.log
+.DS_Store

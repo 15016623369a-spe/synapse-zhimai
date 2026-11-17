@@ -1,0 +1,16 @@
+@import "./styles/base.css";
+@import "./styles/shell.css";
+@import "./styles/components.css";
+@import "./styles/chat.css";
+@import "./styles/library.css";
+@import "./styles/graph.css";
+@import "./styles/settings.css";
+
+@import "./styles/plans.css";
+@import "./styles/plans2.css";
+
+@import "./styles/extend.css";
+
+@import "./styles/enrich.css";
+
+@import "./styles/v2-settings.css";
