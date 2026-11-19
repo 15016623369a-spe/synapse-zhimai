@@ -22,6 +22,9 @@ CITATION_KEYS = {
     "source_type",
     "snippet",
     "score",
+    "rank",
+    "relevance",
+    "kind",
 }
 
 LONG_MESSAGE = "请问在我的 RAG 检索增强生成实践笔记里，分块大小和重叠参数具体是多少？"
@@ -50,7 +53,10 @@ def test_local_extractive_chat_stream(client: TestClient) -> None:
         assert citation["doc_id"].startswith("d_")
         assert citation["doc_title"]
         assert citation["snippet"]
-        assert 0 < citation["score"] <= 1
+        assert citation["score"] is None or 0 < citation["score"] <= 1
+        assert citation["rank"] == citation["index"]
+        assert citation["relevance"] in {"high", "medium", "low", "document"}
+        assert citation["kind"] in {"chunk", "document"}
     assert [citation["index"] for citation in citations] == list(
         range(1, len(citations) + 1)
     )
@@ -64,7 +70,14 @@ def test_local_extractive_chat_stream(client: TestClient) -> None:
     assert done["mode"] == "extractive"
     assert done["conversation_id"] == meta["conversation_id"]
     assert done["message_id"].startswith("m_")
-    assert done["citations"] == citations
+    # 只展示回答里真正引用过的来源（[n] 裁剪后）
+    done_citations = done["citations"]
+    assert done_citations
+    assert {item["index"] for item in done_citations} <= {
+        item["index"] for item in citations
+    }
+    for item in done_citations:
+        assert f"[{item['index']}]" in answer
     assert done["title"] == LONG_MESSAGE[:24]
 
     conversation = client.get(f"/api/conversations/{meta['conversation_id']}").json()
@@ -75,7 +88,7 @@ def test_local_extractive_chat_stream(client: TestClient) -> None:
     ]
     assistant = conversation["messages"][1]
     assert assistant["content"] == answer
-    assert assistant["citations"] == citations
+    assert assistant["citations"] == done_citations
 
     conversations = client.get("/api/conversations").json()["items"]
     assert conversations[0]["id"] == meta["conversation_id"]

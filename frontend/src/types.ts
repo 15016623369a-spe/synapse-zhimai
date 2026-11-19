@@ -63,6 +63,8 @@ export interface ChunkList {
   items: DocumentChunk[];
 }
 
+export type CitationRelevance = "high" | "medium" | "low" | "document";
+
 export interface Citation {
   index: number;
   doc_id: string;
@@ -70,7 +72,13 @@ export interface Citation {
   chunk_id: string;
   source_type: string;
   snippet: string;
-  score: number;
+  /** RRF 归一化分（Top-1 恒为 0.98），不是概率；文档级引用为 null。 */
+  score: number | null;
+  rank?: number;
+  relevance?: CitationRelevance;
+  kind?: "chunk" | "document";
+  /** 模型没有标注 [n] 时的兜底展示。 */
+  unverified?: boolean;
 }
 
 export interface SearchHit {

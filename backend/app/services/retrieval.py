@@ -21,10 +21,53 @@ from collections import Counter, defaultdict
 import numpy as np
 
 from .. import db
-from ..utils import make_snippet, parse_tags_json, round_score
+from ..utils import collapse_whitespace, make_snippet, parse_tags_json, round_score
 from . import embedding, query_intent
 
 logger = logging.getLogger("synapse.retrieval")
+
+_SENTENCE_BOUNDARY = re.compile(r"(?<=[。！？!?；;\n])")
+
+
+def relevant_snippet(query: str, text: str, limit: int = 280) -> str:
+    """摘出与问题最相关的一段原文，而不是永远截开头。
+
+    旧实现直接取前 280 字，导致「手冲咖啡」问题的引用里全是预算表格；
+    这里按句子级 query 词命中挑中心句，再向前后扩展到 limit。
+    """
+    compact = collapse_whitespace(text)
+    if len(compact) <= limit:
+        return compact
+    sentences = [
+        sentence.strip()
+        for sentence in _SENTENCE_BOUNDARY.split(compact)
+        if sentence.strip()
+    ]
+    if not sentences:
+        return make_snippet(compact, limit)
+    terms = set(embedding.tokenize_terms(query))
+    if terms:
+        scores = []
+        for index, sentence in enumerate(sentences):
+            overlap = len(terms & set(embedding.tokenize_terms(sentence)))
+            scores.append((overlap, -index))
+        best = max(range(len(sentences)), key=lambda index: scores[index])
+    else:
+        best = 0
+
+    chosen = [sentences[best]]
+    if len(chosen[0]) > limit:
+        return make_snippet(sentences[best], limit)
+    total = len(chosen[0])
+    # 只向后扩展：让引用片段从「命中问题的句子」开始，避免一上来又是预算/目录。
+    cursor = best + 1
+    while cursor < len(sentences) and total + len(sentences[cursor]) <= limit:
+        chosen.append(sentences[cursor])
+        total += len(sentences[cursor])
+        cursor += 1
+    snippet = "".join(chosen).strip()
+    return snippet if snippet else make_snippet(compact, limit)
+
 
 BM25_K1 = 1.5
 BM25_B = 0.75
@@ -512,7 +555,7 @@ def search_chunks(
                 "doc_id": str(chunk["doc_id"]),  # type: ignore[index]
                 "doc_title": str(chunk["doc_title"]),  # type: ignore[index]
                 "text": str(chunk["text"]),  # type: ignore[index]
-                "snippet": make_snippet(str(chunk["text"])),  # type: ignore[index]
+                "snippet": relevant_snippet(query, str(chunk["text"])),  # type: ignore[index]
                 "score": score,
                 "source_type": str(chunk["source_type"]),  # type: ignore[index]
             }
@@ -539,17 +582,50 @@ def search(
     }
 
 
+def _relevance_label(score: float | None, top: float) -> str:
+    """把「归一化分数」翻译成可解释的档位，避免把 0.98 当成 98% 置信度。"""
+    if score is None:
+        return "document"
+    if top <= 0:
+        return "low"
+    ratio = score / top
+    if ratio >= 0.85:
+        return "high"
+    if ratio >= 0.6:
+        return "medium"
+    return "low"
+
+
 def to_citations(results: list[dict[str, object]]) -> list[dict[str, object]]:
-    """把检索结果转成引用列表（编号 1-based，与 LLM 资料顺序一致）。"""
-    return [
-        {
-            "index": index,
-            "doc_id": str(result["doc_id"]),
-            "doc_title": str(result["doc_title"]),
-            "chunk_id": str(result["chunk_id"]),
-            "source_type": str(result["source_type"]),
-            "snippet": str(result.get("snippet") or make_snippet(str(result["text"]))),
-            "score": round_score(float(result["score"])),
-        }
-        for index, result in enumerate(results, start=1)
-    ]
+    """把检索结果转成引用列表（编号 1-based，与 LLM 资料顺序一致）。
+
+    新增 ``rank`` / ``relevance`` / ``kind``：
+    - ``score`` 是 RRF 融合后的归一化分（Top-1 恒为 0.98），**不是概率**；
+    - 前端应展示 ``relevance``（high/medium/low/document）而不是百分比；
+    - 文档级全文引用 ``kind == "document"``，没有 chunk 级相关度。
+    """
+    top = 0.0
+    for result in results:
+        value = result.get("score")
+        if value is not None:
+            top = max(top, float(value))
+    citations: list[dict[str, object]] = []
+    for index, result in enumerate(results, start=1):
+        raw_score = result.get("score")
+        score = None if raw_score is None else round_score(float(raw_score))
+        kind = str(result.get("kind") or "chunk")
+        citations.append(
+            {
+                "index": index,
+                "doc_id": str(result["doc_id"]),
+                "doc_title": str(result["doc_title"]),
+                "chunk_id": str(result["chunk_id"]),
+                "source_type": str(result["source_type"]),
+                "snippet": str(result.get("snippet") or make_snippet(str(result["text"]))),
+                "score": score,
+                "rank": index,
+                "relevance": str(result.get("relevance") or _relevance_label(score, top)),
+                "kind": kind,
+            }
+        )
+    return citations

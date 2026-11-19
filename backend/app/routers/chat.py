@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, HTTPException, Request
@@ -47,6 +48,14 @@ HISTORY_LIMIT = 4
 HISTORY_ASSISTANT_MAX_CHARS = 700
 #: 追问继承文档时 doc-scoped 检索的 chunk 数（不注入整篇正文）
 DOC_SCOPED_TOP_K = 8
+#: 回答实际使用的片段上限 / 相关性下限（相对 Top-1）
+ANSWER_SOURCE_LIMIT = 4
+RELEVANCE_FLOOR = 0.40
+RELEVANCE_RATIO = 0.45
+#: 模型没标引用时的兜底展示条数
+UNVERIFIED_CITATION_LIMIT = 3
+
+_CITATION_MARK = re.compile(r"\[(\d{1,2})\]")
 
 
 def _sse(event: str, data: dict[str, object]) -> str:
@@ -207,9 +216,68 @@ def _document_context_result(
         "doc_title": str(reference_doc.get("title") or ""),
         "text": context_text,
         "snippet": make_snippet(context_text),
-        "score": 0.99,
+        # 整篇文档没有 chunk 级相似度，不要伪造 0.99；前端按 kind=document 展示。
+        "score": None,
+        "relevance": "document",
+        "kind": "document",
         "source_type": str(reference_doc.get("source_type") or "pdf"),
     }
+
+
+def _filter_answer_sources(
+    results: list[dict[str, object]],
+    limit: int = ANSWER_SOURCE_LIMIT,
+) -> list[dict[str, object]]:
+    """只保留真正能支撑回答的片段。
+
+    ``score`` 是归一化融合分（Top-1≈0.98），所以用「相对 Top-1 比例 + 绝对下限」
+    双重门槛，而不是拿它当概率。文档级全文引用不参与过滤。
+    """
+    if not results:
+        return []
+    numeric = [
+        float(result["score"])
+        for result in results
+        if result.get("score") is not None
+    ]
+    top = max(numeric) if numeric else 0.0
+    if top <= 0:
+        return results[:limit]
+    floor = max(RELEVANCE_FLOOR, top * RELEVANCE_RATIO)
+    kept = [
+        result
+        for result in results
+        if result.get("kind") == "document"
+        or result.get("score") is None
+        or float(result["score"]) >= floor
+    ]
+    return (kept or results[:1])[:limit]
+
+
+def _prune_citations(
+    answer: str, citations: list[dict[str, object]]
+) -> tuple[list[dict[str, object]], list[int]]:
+    """按回答里实际出现的 ``[n]`` 裁剪引用，并返回越界编号。
+
+    - 文档级全文引用（kind=document）不参与：整篇内容本身就是来源；
+    - 模型一个引用都没标时，保留前 3 条并打 ``unverified`` 标记，避免来源面板空掉；
+    - 返回的 ``invalid`` 是回答里引用了不存在的编号（幻觉引用），用于日志/诊断。
+    """
+    if not citations:
+        return [], []
+    if any(citation.get("kind") == "document" for citation in citations):
+        return citations, []
+
+    used = {int(match) for match in _CITATION_MARK.findall(answer)}
+    invalid = sorted(index for index in used if index < 1 or index > len(citations))
+    cited = [citation for citation in citations if int(citation["index"]) in used]
+    if cited:
+        return cited, invalid
+    fallback = [
+        {**citation, "unverified": True}
+        for citation in citations[:UNVERIFIED_CITATION_LIMIT]
+    ]
+    return fallback, invalid
 
 
 async def _stream_text(text: str) -> AsyncIterator[str]:
@@ -306,7 +374,7 @@ async def chat(payload: ChatIn, request: Request) -> StreamingResponse:
                     results = [_document_context_result(reference_doc, doc_context_text)]
     else:
         results = _search(search_text, payload.top_k, doc_ids)
-    citations = retrieval.to_citations(results)
+    results = _filter_answer_sources(results)
     llm_config = llm.get_config()
     mode = "llm" if llm.is_configured(llm_config) else "extractive"
     gap = (
@@ -314,6 +382,11 @@ async def chat(payload: ChatIn, request: Request) -> StreamingResponse:
         if suppress_gap
         else agent.detect_gap(search_text, results, reference_doc=reference_doc)
     )
+    if gap and float(gap.get("coverage") or 0) <= 0.01:
+        # 覆盖率为 0（通常是问题实体在语料里完全未登录）：不要把无关片段
+        # 硬凑成「找到 X 段相关内容」，直接走「没找到」+ 缺口卡。
+        results = []
+    citations = retrieval.to_citations(results)
 
     def _extractive_answer(include_gap_hint: bool = True) -> str:
         if reference_doc is not None and summary_intent:
@@ -501,7 +574,18 @@ async def chat(payload: ChatIn, request: Request) -> StreamingResponse:
                         break
 
             answer = "".join(parts)
-            assistant_message_id = _save_assistant(conversation_id, answer, citations)
+            final_citations, invalid_citations = _prune_citations(answer, citations)
+            if invalid_citations:
+                logger.warning(
+                    "回答引用了不存在的来源编号：%s（可用 %s 条）",
+                    invalid_citations,
+                    len(citations),
+                )
+            diagnostics["invalid_citations"] = invalid_citations
+            diagnostics["cited_sources"] = len(final_citations)
+            assistant_message_id = _save_assistant(
+                conversation_id, answer, final_citations
+            )
             saved = True
             title = _conversation_title_of(conversation_id)
             yield _sse(
@@ -509,7 +593,7 @@ async def chat(payload: ChatIn, request: Request) -> StreamingResponse:
                 {
                     "message_id": assistant_message_id,
                     "conversation_id": conversation_id,
-                    "citations": citations,
+                    "citations": final_citations,
                     "mode": final_mode,
                     "title": title,
                     "gap": None if mcp_used else gap,
@@ -530,7 +614,8 @@ async def chat(payload: ChatIn, request: Request) -> StreamingResponse:
             if not saved:
                 answer = "".join(parts)
                 if answer.strip():
-                    _save_assistant(conversation_id, answer, citations)
+                    fallback_citations, _ = _prune_citations(answer, citations)
+                    _save_assistant(conversation_id, answer, fallback_citations)
 
     return StreamingResponse(
         event_stream(),

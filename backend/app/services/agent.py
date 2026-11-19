@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections.abc import AsyncIterator
 
 from ..utils import truncate
@@ -19,14 +20,47 @@ from . import extend as extend_service
 
 logger = logging.getLogger("synapse.agent")
 
-GAP_COVERAGE_THRESHOLD = 0.34
-GAP_COVERAGE_STRICT_THRESHOLD = 0.85
-GAP_RARE_TERM_IDF = 2.2
-GAP_WEAK_RESULT_SCORE = 0.6
+#: 未登录词（语料里 df=0）不参与覆盖率分母：它们多半是分词边界或同义改写，
+#: 直接按「未命中」计权会把「咖啡粉水比」这类正常问题误判成缺口。
+#: 只有「明确的实体」（英文术语 / 引号词）在语料里完全不存在时，才作为硬缺口。
+GAP_COVERAGE_THRESHOLD = 0.25
+GAP_ENTITY_MIN_LEN = 2
 MAX_SEARCH_CALLS = 2
 MAX_TOOL_ROUNDS = 2
 TOOL_MAX_RESULTS = 5
 TOOL_CANDIDATE_LIMIT = 8
+
+_ASCII_ENTITY = re.compile(r"[A-Za-z][A-Za-z0-9_.+-]{1,}")
+_QUOTED_ENTITY = re.compile(r"「([^」]{1,24})」|“([^”]{1,24})”|\"([^\"]{1,24})\"")
+_ENTITY_STOPWORDS = {
+    "the",
+    "and",
+    "for",
+    "with",
+    "how",
+    "what",
+    "why",
+    "ok",
+}
+#: 泛技术缩写不算「硬实体」：知识库里没出现字面 "AI" 不代表没有 AI 相关知识。
+_GENERIC_ACRONYMS = {
+    "ai",
+    "llm",
+    "rag",
+    "mvp",
+    "api",
+    "pdf",
+    "html",
+    "http",
+    "https",
+    "sql",
+    "db",
+    "ui",
+    "ux",
+    "ocr",
+    "nlp",
+    "cv",
+}
 
 #: MCP 工具阶段：最多 2 轮 / 3 次工具调用
 MCP_MAX_ROUNDS = 2
@@ -73,12 +107,52 @@ TOOL_SYSTEM_PROMPT = (
 )
 
 
+def _query_entities(question: str) -> list[str]:
+    """提取问题里的「硬实体」：英文术语与引号词（去重、小写）。
+
+    这些词如果连语料里都不存在，基本可以判定知识库缺这块知识；
+    而普通中文词的未登录更可能是分词边界（如「咖啡粉水比」被切成「咖啡粉 / 水比」），
+    不能当作缺口证据。
+    """
+    entities: list[str] = []
+    for match in _ASCII_ENTITY.finditer(question):
+        raw = match.group(0).strip("._+-")
+        token = raw.lower()
+        if len(token) < GAP_ENTITY_MIN_LEN:
+            continue
+        if token in _ENTITY_STOPWORDS or token in _GENERIC_ACRONYMS:
+            continue
+        # 只有「标识符形状」的词才算硬实体：带数字（V60/Z2）、长词（Transformer）、
+        # 或全大写缩写（BP）；小写短词（ai/rag）交给覆盖率判断。
+        looks_like_identifier = (
+            any(char.isdigit() for char in token)
+            or len(token) >= 5
+            or (raw.isupper() and len(raw) >= 2)
+        )
+        if looks_like_identifier:
+            entities.append(token)
+    for match in _QUOTED_ENTITY.finditer(question):
+        token = next((group for group in match.groups() if group), "").strip()
+        if token:
+            entities.append(token.lower())
+    return list(dict.fromkeys(entities))
+
+
 def detect_gap(
     question: str,
     results: list[dict[str, object]],
     reference_doc: dict[str, object] | None = None,
 ) -> dict[str, object] | None:
-    """检测知识缺口；有缺口返回 ``{needs_more, reason, suggested_queries}``。"""
+    """检测知识缺口；有缺口返回 ``{needs_more, reason, suggested_queries}``。
+
+    判据（按优先级）：
+    1. 没有召回任何片段 → 缺口；
+    2. 问题里的硬实体（英文术语 / 引号词）在语料中完全未登录 → 缺口；
+    3. 问题词的 IDF 加权覆盖率（只统计语料内登录词）低于阈值 → 缺口。
+
+    刻意不再用「只要出现未登录词就判缺口」的旧规则：那会把分词边界
+    （如「粉水比」）误判成知识缺口，让首图出现「答案 + 资料有限」的自相矛盾。
+    """
     question = str(question or "").strip()
     if not question:
         return None
@@ -90,41 +164,54 @@ def detect_gap(
             "needs_more": True,
             "reason": "知识库中未找到相关内容",
             "suggested_queries": suggested,
+            "coverage": 0.0,
         }
 
     question_terms = set(embedding.tokenize_terms(question))
-    coverage = 0.0
-    rare_unmatched: list[str] = []
-    if question_terms:
-        top_text = " ".join(str(result.get("text") or "") for result in results[:3])
-        top_terms = set(embedding.tokenize_terms(top_text))
-        df, corpus_size = _corpus_stats()
-        if corpus_size > 0:
-            total_idf = sum(_term_idf(term, df, corpus_size) for term in question_terms) or 1.0
+    top_text = " ".join(str(result.get("text") or "") for result in results[:3])
+    top_terms = set(embedding.tokenize_terms(top_text))
+    df, corpus_size = _corpus_stats()
+
+    if corpus_size > 0:
+        entities = _query_entities(question)
+        missing_entities = [
+            entity
+            for entity in entities
+            if df.get(entity, 0) == 0 and entity not in top_terms
+        ]
+        if missing_entities:
+            return {
+                "needs_more": True,
+                "reason": f"知识库中没有收录「{missing_entities[0]}」相关资料",
+                "suggested_queries": suggested,
+                "coverage": 0.0,
+                "missing_entities": missing_entities[:3],
+            }
+
+        in_vocab = [term for term in question_terms if df.get(term, 0) > 0]
+        if not in_vocab:
+            coverage = 0.0
+        else:
+            total_idf = sum(_term_idf(term, df, corpus_size) for term in in_vocab) or 1.0
             matched_idf = sum(
                 _term_idf(term, df, corpus_size)
-                for term in question_terms
+                for term in in_vocab
                 if term in top_terms
             )
             coverage = matched_idf / total_idf
-            rare_unmatched = [
-                term
-                for term in question_terms
-                if term not in top_terms and df.get(term, 0) == 0
-            ]
-        else:
-            coverage = len(question_terms & top_terms) / len(question_terms)
+    else:
+        coverage = (
+            len(question_terms & top_terms) / len(question_terms)
+            if question_terms
+            else 0.0
+        )
 
-    weak_single = len(results) <= 1 and float(results[0].get("score") or 0) < GAP_WEAK_RESULT_SCORE
-    if (
-        coverage < GAP_COVERAGE_THRESHOLD
-        or (coverage < GAP_COVERAGE_STRICT_THRESHOLD and rare_unmatched)
-        or weak_single
-    ):
+    if coverage < GAP_COVERAGE_THRESHOLD:
         return {
             "needs_more": True,
             "reason": "知识库中相关段落较少",
             "suggested_queries": suggested,
+            "coverage": round(coverage, 3),
         }
     return None
 

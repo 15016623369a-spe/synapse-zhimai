@@ -194,10 +194,35 @@ def main() -> int:
         if sources:
             expect_keys(
                 sources[0],
-                ["index", "doc_id", "doc_title", "chunk_id", "source_type", "snippet", "score"],
+                [
+                    "index",
+                    "doc_id",
+                    "doc_title",
+                    "chunk_id",
+                    "source_type",
+                    "snippet",
+                    "score",
+                    "rank",
+                    "relevance",
+                    "kind",
+                ],
                 "citation",
             )
+            check(
+                "citation relevance label",
+                all(
+                    item.get("relevance") in {"high", "medium", "low", "document"}
+                    for item in sources
+                ),
+                str([item.get("relevance") for item in sources]),
+            )
         done = next((p for e, p in events if e == "done"), {})
+        done_citations = done.get("citations") or []
+        check(
+            "done citations are cited in answer",
+            all(f"[{item['index']}]" in text or item.get("kind") == "document" for item in done_citations),
+            f"done={[item.get('index') for item in done_citations]} text={text[:80]}",
+        )
         convo_id = done.get("conversation_id") or next(
             (p.get("conversation_id") for e, p in events if e == "meta"), None
         )
