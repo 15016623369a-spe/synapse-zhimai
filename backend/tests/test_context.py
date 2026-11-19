@@ -20,6 +20,7 @@ from fastapi.testclient import TestClient
 
 from app import db
 from app.services import context as context_service
+from app.services import extend as extend_service
 from app.services import search
 from app.utils import new_id, now_iso
 
@@ -471,6 +472,21 @@ def test_extend_search_context_without_doc_uses_previous_question(
         ]
 
     monkeypatch.setattr(search, "search_web", fake_search_web)
+
+    # /extend/search 对学术意图走 arXiv / OpenAlex，不会调用 search_web；
+    # 这里直接替换学术检索层，避免用例依赖真实外网（429 时整条链路 503）。
+    def fake_academic(*args, **kwargs):
+        return [
+            {
+                "url": "https://example.com/rag-evaluation",
+                "title": "RAG 评估指标与检索实践",
+                "snippet": "RAG 常用评估指标包括忠实度、上下文召回率与引用准确率。",
+                "source": "mock",
+                "authority": "unknown",
+            }
+        ]
+
+    monkeypatch.setattr(extend_service, "_academic_raw_results", fake_academic)
     response = client.post(
         "/api/extend/search",
         json={"question": "创新点呢", "conversation_id": conversation_id},

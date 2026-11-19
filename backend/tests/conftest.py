@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import socket
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -14,6 +15,27 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+
+
+@pytest.fixture(autouse=True)
+def block_real_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    """测试必须密闭：任何出站 TCP 连接直接失败，loopback 放行。
+
+    之前 ``test_context`` 里的 /extend/search 用例会真的访问 OpenAlex / arXiv，
+    CI 一旦被限流就整条链路 503、测试随机红。这里兜底，逼调用方显式 mock。
+    """
+
+    real_connect = socket.socket.connect
+
+    def guarded_connect(self, address):  # type: ignore[no-untyped-def]
+        host = address[0] if isinstance(address, tuple) else str(address)
+        if host in {"127.0.0.1", "::1", "localhost", "testserver"}:
+            return real_connect(self, address)
+        raise RuntimeError(
+            f"测试禁止访问外网：{address}；请在用例里 monkeypatch 或使用 MockTransport"
+        )
+
+    monkeypatch.setattr(socket.socket, "connect", guarded_connect)
 
 # ---------------------------------------------------------------------------
 # 演示语料（覆盖多主题、概念互相重叠，便于验证检索与图谱）
