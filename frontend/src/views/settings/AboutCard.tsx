@@ -12,7 +12,7 @@ export function AboutCard() {
           <h2 className="settings-card-title">关于知脉</h2>
           <p className="settings-card-desc">让知识，像神经元一样连接。</p>
         </div>
-        <span className="badge">v1.0.0</span>
+        <span className="badge">v2.4.0</span>
       </div>
       <div className="settings-body">
         <div className="about-stack">

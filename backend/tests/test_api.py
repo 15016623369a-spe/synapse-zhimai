@@ -28,7 +28,7 @@ def test_health_structure(client: TestClient) -> None:
         "search",
     }
     assert payload["status"] == "ok"
-    assert payload["version"] == "1.0.0"
+    assert payload["version"] == config.VERSION
     assert payload["documents"] == 0
     assert payload["chunks"] == 0
     assert payload["llm"] == {"configured": False, "model": "", "base_url": ""}

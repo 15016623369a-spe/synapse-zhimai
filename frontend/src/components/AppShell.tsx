@@ -139,7 +139,7 @@ function Sidebar({ route, collapsed, onToggle }: SidebarProps) {
 
         <div className="sidebar-version">
           <span className="version-label">Synapse · 知脉</span>
-          <span>v1.0</span>
+          <span>v2.4</span>
         </div>
       </div>
     </aside>

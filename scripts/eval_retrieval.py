@@ -59,19 +59,39 @@ def main() -> int:
         hit_total = 0
         kw_total = 0
         kw_hit = 0
+        # 只在「有期望文档」的题上算召回与 MRR（无答案题单独看 hit-rate）
+        recall_sum = 0.0
+        mrr_sum = 0.0
+        answerable = 0
         for i, item in enumerate(questions, 1):
             results = client.post(
                 "/api/search", json={"query": item["question"], "top_k": TOP_K}
             ).json()["results"]
-            got_files = {id2file.get(r["doc_id"], r["doc_title"]) for r in results}
+            ranked_files = [id2file.get(r["doc_id"], r["doc_title"]) for r in results]
+            got_files = set(ranked_files)
             expected = set(item["docs"])
             hits = expected & got_files
             if expected:
                 hit = bool(hits)
+                recall = len(hits) / len(expected)
+                first_rank = next(
+                    (
+                        rank
+                        for rank, name in enumerate(ranked_files, start=1)
+                        if name in expected
+                    ),
+                    None,
+                )
+                mrr = 1.0 / first_rank if first_rank else 0.0
+                answerable += 1
+                recall_sum += recall
+                mrr_sum += mrr
             else:
                 # “无答案”题：期望检索不到任何文档
                 hit = len(results) == 0
                 hits = set()
+                recall = 1.0 if hit else 0.0
+                mrr = 1.0 if hit else 0.0
             hit_total += int(hit)
             text = " ".join(r["text"] for r in results)
             found = [k for k in item["keywords"] if k and k in text]
@@ -80,13 +100,23 @@ def main() -> int:
             mark = "✅" if hit else "❌"
             print(f"{mark} Q{i}: {item['question']}")
             print(f"   expected={sorted(expected) or '-'} hit={sorted(hits) or '-'}")
-            print(f"   top={[id2file.get(r['doc_id'], r['doc_title']) for r in results[:4]]}")
-            print(f"   keywords {len(found)}/{len(item['keywords'])}: {found}")
+            print(f"   top={ranked_files[:4]}")
+            extra = f" recall={recall:.2f} mrr={mrr:.3f}" if expected else ""
+            print(f"   keywords {len(found)}/{len(item['keywords'])}: {found}{extra}")
 
         n = max(len(questions), 1)
         print("\n=== summary ===")
         print(f"document hit-rate@k{TOP_K}: {hit_total}/{n} = {hit_total / n:.0%}")
+        print(
+            f"expected-doc recall (avg, n={answerable}): "
+            f"{recall_sum / max(answerable, 1):.3f}"
+        )
+        print(f"MRR@k{TOP_K} (n={answerable}): {mrr_sum / max(answerable, 1):.3f}")
         print(f"keyword coverage: {kw_hit}/{kw_total} = {kw_hit / max(kw_total, 1):.0%}")
+        print(
+            "\n注：这是 10 题 / 小语料上的回归指标，不是通用准确率；"
+            "无答案题不计入 recall/MRR。"
+        )
     return 0
 
 
