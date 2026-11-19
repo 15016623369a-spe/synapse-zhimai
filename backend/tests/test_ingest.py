@@ -188,6 +188,9 @@ def test_url_import_with_mocked_transport(
             200, text=html, headers={"content-type": "text/html; charset=utf-8"}
         )
 
+    # 本机 DNS 可能把 example.com 解析到保留网段；测试只关心解析逻辑，
+    # SSRF 校验由下面的独立用例覆盖。
+    monkeypatch.setenv("SYNAPSE_ALLOW_PRIVATE_FETCH", "1")
     monkeypatch.setattr(ingest, "HTTP_TRANSPORT", httpx.MockTransport(handler))
     response = client.post(
         "/api/documents/url",
@@ -206,6 +209,40 @@ def test_url_import_rejects_invalid_scheme(client: TestClient) -> None:
     response = client.post("/api/documents/url", json={"url": "ftp://example.com/a"})
     assert response.status_code == 400
     assert "http/https" in response.json()["detail"]
+
+
+def test_url_import_blocks_private_address(client: TestClient) -> None:
+    """documents/url 必须和知识扩展一样拦内网地址（SECURITY.md 的承诺）。"""
+    response = client.post(
+        "/api/documents/url", json={"url": "http://127.0.0.1:9/secret"}
+    )
+    assert response.status_code == 400, response.text
+    assert "内网" in response.json()["detail"]
+
+
+def test_url_import_blocks_redirect_to_private(
+    client: TestClient, monkeypatch
+) -> None:
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(str(request.url))
+        return httpx.Response(302, headers={"location": "http://127.0.0.1:9/secret"})
+
+    def fake_guard(url: str) -> None:
+        if "127.0.0.1" in url:
+            raise ingest.IngestError("抓取被拒绝：暂不支持抓取内网地址")
+
+    monkeypatch.setattr(ingest, "_ensure_url_safe", fake_guard)
+    monkeypatch.setattr(ingest, "HTTP_TRANSPORT", httpx.MockTransport(handler))
+
+    response = client.post(
+        "/api/documents/url", json={"url": "https://example.com/redirect"}
+    )
+    assert response.status_code == 400, response.text
+    assert "内网" in response.json()["detail"]
+    # 第二跳在发请求之前就被拦截
+    assert len(calls) == 1
 
 
 def test_document_list_filters_and_pagination(client: TestClient) -> None:

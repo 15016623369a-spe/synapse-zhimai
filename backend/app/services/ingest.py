@@ -9,7 +9,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import docx
 import httpx
@@ -364,35 +364,64 @@ def parse_text_note(title: str | None, content: str, tags: list[str] | None = No
 # ---------------------------------------------------------------------------
 
 
+def _ensure_url_safe(url: str) -> None:
+    """复用知识扩展的 SSRF 防护（内网 / 环回 / 非 http(s) 一律拒绝）。
+
+    延迟 import：extend 在模块级 import 了 ingest，这里不能反过来在顶层 import。
+    """
+    from . import extend as extend_service
+
+    try:
+        extend_service.ensure_safe_url(url)
+    except extend_service.FetchBlocked as exc:
+        raise IngestError(f"抓取被拒绝：{exc}") from exc
+    except extend_service.ExtendError as exc:
+        raise IngestError(str(exc)) from exc
+
+
 async def fetch_url_html(url: str) -> tuple[str, str]:
-    """抓取网页 HTML，返回 ``(html, 最终 URL)``；限制 5MB / 15s。"""
+    """抓取网页 HTML，返回 ``(html, 最终 URL)``；限制 5MB / 15s。
+
+    重定向手动跟随（最多 5 跳），每一跳都重新做 SSRF 校验，
+    避免「首跳合法、302 到内网」的绕过。
+    """
     parsed = urlparse(url.strip())
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise IngestError("仅支持 http/https 链接")
     headers = {"User-Agent": config.URL_USER_AGENT, "Accept": "text/html,*/*"}
     timeout = httpx.Timeout(config.URL_TIMEOUT_SECONDS, connect=10.0)
+    current = url.strip()
     try:
         async with httpx.AsyncClient(
             timeout=timeout,
-            follow_redirects=True,
+            follow_redirects=False,
             headers=headers,
             transport=HTTP_TRANSPORT,
         ) as client:
-            async with client.stream("GET", url) as response:
-                if response.status_code >= 400:
-                    raise IngestError(f"网页请求失败（HTTP {response.status_code}）")
-                buffer = bytearray()
-                async for chunk in response.aiter_bytes():
-                    buffer.extend(chunk)
-                    if len(buffer) > config.MAX_URL_BYTES:
-                        raise IngestError("网页内容超过 5MB 限制")
-                encoding = response.charset_encoding or "utf-8"
-                raw = bytes(buffer)
-                try:
-                    html = raw.decode(encoding, errors="replace")
-                except LookupError:
-                    html = raw.decode("utf-8", errors="replace")
-                return html, str(response.url)
+            for _ in range(5):
+                _ensure_url_safe(current)
+                async with client.stream("GET", current) as response:
+                    if response.is_redirect:
+                        location = response.headers.get("location")
+                        if not location:
+                            raise IngestError("网页重定向缺少目标地址")
+                        current = urljoin(str(response.url), location)
+                        continue
+                    if response.status_code >= 400:
+                        raise IngestError(f"网页请求失败（HTTP {response.status_code}）")
+                    buffer = bytearray()
+                    async for chunk in response.aiter_bytes():
+                        buffer.extend(chunk)
+                        if len(buffer) > config.MAX_URL_BYTES:
+                            raise IngestError("网页内容超过 5MB 限制")
+                    encoding = response.charset_encoding or "utf-8"
+                    raw = bytes(buffer)
+                    try:
+                        html = raw.decode(encoding, errors="replace")
+                    except LookupError:
+                        html = raw.decode("utf-8", errors="replace")
+                    return html, str(response.url)
+            raise IngestError("网页重定向次数过多")
     except IngestError:
         raise
     except httpx.TimeoutException as exc:

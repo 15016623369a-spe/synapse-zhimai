@@ -15,7 +15,7 @@ import os
 import re
 import socket
 import time
-from urllib.parse import parse_qs, urlparse, urlunparse
+from urllib.parse import parse_qs, urljoin, urlparse, urlunparse
 
 import httpx
 from pypdf import PdfReader
@@ -164,9 +164,44 @@ def _strip_bing_redirect(url: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+MAX_REDIRECTS = 5
+
+
+def _stream_with_guard(
+    client: httpx.Client,
+    url: object,
+    headers: dict[str, str],
+    max_bytes: int,
+    label: str,
+) -> tuple[str, str | None, bytes]:
+    """手动跟随重定向，每一跳都重新做 SSRF 校验。
+
+    ``follow_redirects=True`` 会在校验前先把请求发到 302 目标，
+    「首跳合法、二跳到内网」就能绕过防护；这里改成逐跳校验。
+    """
+    current = ensure_safe_url(url)
+    for _ in range(MAX_REDIRECTS):
+        ensure_safe_url(current)
+        with client.stream("GET", current, headers=headers) as response:
+            if response.is_redirect:
+                location = response.headers.get("location")
+                if not location:
+                    raise ExtendError("重定向缺少目标地址")
+                current = urljoin(str(response.url), location)
+                continue
+            if response.status_code >= 400:
+                raise ExtendError(f"{label}请求失败（HTTP {response.status_code}）")
+            buffer = bytearray()
+            for chunk in response.iter_bytes():
+                buffer.extend(chunk)
+                if len(buffer) > max_bytes:
+                    raise ExtendError(f"{label}内容超过 {max_bytes // (1024 * 1024)}MB 限制")
+            return str(response.url), response.charset_encoding, bytes(buffer)
+    raise ExtendError("重定向次数过多")
+
+
 def fetch_page(url: object) -> tuple[str, str]:
     """抓取网页，返回 ``(最终 URL, HTML)``；15s / 5MB / 仅 http(s) / 拦截内网。"""
-    safe_url = ensure_safe_url(url)
     headers = {
         "User-Agent": FETCH_USER_AGENT,
         "Accept": "text/html,application/xhtml+xml",
@@ -175,27 +210,18 @@ def fetch_page(url: object) -> tuple[str, str]:
     try:
         with httpx.Client(
             timeout=httpx.Timeout(FETCH_TIMEOUT, connect=10.0),
-            follow_redirects=True,
-            headers=headers,
+            follow_redirects=False,
             transport=HTTP_TRANSPORT,
         ) as client:
-            with client.stream("GET", safe_url) as response:
-                if response.status_code >= 400:
-                    raise ExtendError(f"网页请求失败（HTTP {response.status_code}）")
-                final_url = str(response.url)
-                if not _allow_private_fetch():
-                    _ensure_host_safe(urlparse(final_url).hostname or "")
-                buffer = bytearray()
-                for chunk in response.iter_bytes():
-                    buffer.extend(chunk)
-                    if len(buffer) > MAX_PAGE_BYTES:
-                        raise ExtendError("网页内容超过 5MB 限制")
-                encoding = response.charset_encoding or "utf-8"
-                try:
-                    html = bytes(buffer).decode(encoding, errors="replace")
-                except LookupError:
-                    html = bytes(buffer).decode("utf-8", errors="replace")
-                return final_url, html
+            final_url, charset, raw = _stream_with_guard(
+                client, url, headers, MAX_PAGE_BYTES, "网页"
+            )
+        encoding = charset or "utf-8"
+        try:
+            html = raw.decode(encoding, errors="replace")
+        except LookupError:
+            html = raw.decode("utf-8", errors="replace")
+        return final_url, html
     except ExtendError:
         raise
     except httpx.TimeoutException as exc:
@@ -222,7 +248,6 @@ def _arxiv_pdf_url(url: object) -> str | None:
 
 def fetch_arxiv_pdf_text(pdf_url: object) -> tuple[str, str]:
     """抓取 arXiv PDF 并用 pypdf 抽取全文（≤15MB / ≤20000 字）。"""
-    safe_url = ensure_safe_url(pdf_url)
     headers = {
         "User-Agent": FETCH_USER_AGENT,
         "Accept": "application/pdf",
@@ -230,20 +255,14 @@ def fetch_arxiv_pdf_text(pdf_url: object) -> tuple[str, str]:
     try:
         with httpx.Client(
             timeout=httpx.Timeout(30.0, connect=10.0),
-            follow_redirects=True,
-            headers=headers,
+            follow_redirects=False,
             transport=HTTP_TRANSPORT,
         ) as client:
-            with client.stream("GET", safe_url) as response:
-                if response.status_code >= 400:
-                    raise ExtendError(f"PDF 请求失败（HTTP {response.status_code}）")
-                buffer = bytearray()
-                for chunk in response.iter_bytes():
-                    buffer.extend(chunk)
-                    if len(buffer) > MAX_PDF_BYTES:
-                        raise ExtendError("PDF 超过 15MB 限制")
+            _final_url, _charset, buffer = _stream_with_guard(
+                client, pdf_url, headers, MAX_PDF_BYTES, "PDF"
+            )
         try:
-            reader = PdfReader(io.BytesIO(bytes(buffer)))
+            reader = PdfReader(io.BytesIO(buffer))
             title = ""
             try:
                 if reader.metadata and reader.metadata.title:

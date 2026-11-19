@@ -28,8 +28,11 @@ Synapse is designed as a **single-user, self-hosted personal tool**.
   from trusted sources. Built-in servers are read-only; custom tools are
   disabled until you explicitly select `allowed_tools`. Do not expose
   user-configurable MCP server setup to untrusted users.
-- Web/URL fetching has SSRF protections against loopback/private addresses, but
-  the feature is best-effort. Do not run it on a network with sensitive internal
+- Web/URL fetching has SSRF protections against loopback/private addresses.
+  Both `POST /api/documents/url` and the knowledge-extension fetcher validate the
+  initial URL and **every redirect hop** before requesting it. The check is
+  best-effort (DNS rebinding is out of scope); set `SYNAPSE_ALLOW_PRIVATE_FETCH=1`
+  only for local tests. Do not run it on a network with sensitive internal
   services unless you understand the risk.
 - Tool/web content is untrusted data and may contain prompt-injection attempts.
   The app treats external content as context, not instructions, but no agent
