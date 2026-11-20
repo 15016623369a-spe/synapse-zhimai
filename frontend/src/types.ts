@@ -153,6 +153,8 @@ export interface ChatSourcesEvent {
 
 export interface ChatGapInfo {
   needs_more: boolean;
+  /** gap：强缺口，弹卡片并触发联网补充；weak：只提示「匹配证据较少」。 */
+  severity?: "gap" | "weak";
   reason: string;
   suggested_queries?: string[];
 }

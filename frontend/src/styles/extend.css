@@ -1295,3 +1295,24 @@
     display: none;
   }
 }
+
+/* 弱提示：证据偏少但未构成明确缺口，不弹卡片、不触发联网 */
+.gap-hint {
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.45);
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.gap-hint svg {
+  flex-shrink: 0;
+  color: var(--amber);
+  opacity: 0.8;
+}

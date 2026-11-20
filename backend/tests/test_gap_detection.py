@@ -88,6 +88,22 @@ def test_gap_hits_unseen_entity(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "transformer" in str(gap["reason"]).lower()
 
 
+def test_gap_returns_weak_when_two_terms_spread_across_sentences(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """两个中等权重词分散在不同句子：chunk 覆盖够、单句覆盖不够 → 弱提示。"""
+    terms = ["检索", "向量", "分块", "重叠", "融合", "召回"]
+    df = Counter({term: 5 for term in terms})
+    monkeypatch.setattr(agent, "_corpus_stats", lambda: (df, 100))
+    results = [{"text": "检索很重要。向量也很重要。", "score": 0.98}]
+    gap = agent.detect_gap("检索 向量 分块 重叠 融合 召回 分别是什么？", results)
+    assert gap is not None
+    assert gap["severity"] == "weak"
+    assert gap["needs_more"] is True
+    assert gap["coverage"] < 0.4
+    assert gap["sentence_coverage"] < 0.22
+
+
 def test_gap_hits_low_coverage(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_corpus_stats(monkeypatch)
     results = [{"text": "手冲咖啡的水温是 92 度，研磨度中细。", "score": 0.98}]

@@ -207,6 +207,14 @@ export function MessageBubble({
           ) : null}
 
           {message.gap?.needs_more && !message.reference && !message.error ? (
+            message.gap.severity === "weak" ? (
+              <div className="gap-hint">
+                <Search size={12} />
+                <span>
+                  {message.gap.reason || "匹配证据较少，建议核对引用来源。"}
+                </span>
+              </div>
+            ) : (
             <div className="gap-card">
               <div className="gap-card-head">
                 <span className="gap-card-icon">
@@ -246,6 +254,7 @@ export function MessageBubble({
                 搜索补充资料
               </button>
             </div>
+            )
           ) : null}
 
           {message.webSources && message.webSources.length > 0 && !message.reference && !message.error ? (

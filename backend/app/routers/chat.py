@@ -382,7 +382,11 @@ async def chat(payload: ChatIn, request: Request) -> StreamingResponse:
         if suppress_gap
         else agent.detect_gap(search_text, results, reference_doc=reference_doc)
     )
-    if gap and float(gap.get("coverage") or 0) <= 0.01:
+    if (
+        gap
+        and gap.get("severity") == "gap"
+        and float(gap.get("coverage") or 0) <= 0.01
+    ):
         # 覆盖率为 0（通常是问题实体在语料里完全未登录）：不要把无关片段
         # 硬凑成「找到 X 段相关内容」，直接走「没找到」+ 缺口卡。
         results = []
@@ -395,7 +399,7 @@ async def chat(payload: ChatIn, request: Request) -> StreamingResponse:
                 str(reference_doc.get("content") or ""),
             )
         answer = llm.build_extractive_answer(message, results)
-        if gap and include_gap_hint:
+        if gap and include_gap_hint and gap.get("severity") == "gap":
             answer += (
                 "\n\n（当前知识库资料有限，可联网检索补充资料；加入前由你确认。）"
             )
@@ -487,6 +491,7 @@ async def chat(payload: ChatIn, request: Request) -> StreamingResponse:
             if (
                 mode == "llm"
                 and gap
+                and gap.get("severity") == "gap"
                 and search_service.is_enabled()
                 and not mcp_used
             ):

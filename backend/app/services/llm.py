@@ -550,7 +550,15 @@ def build_extractive_answer(query: str, results: list[dict[str, object]]) -> str
     chosen_tokens: list[set[str]] = []
     for index, result in enumerate(results[:EXTRACTIVE_MAX_SOURCES], start=1):
         text = str(result.get("text") or "")
-        candidates = _candidate_sentences(query, text)
+        doc_title = _clean_sentence(str(result.get("doc_title") or ""))
+        candidates = [
+            sentence
+            for sentence in _candidate_sentences(query, text)
+            # 标题行与 query 的词重合往往最高，但它不是答案；跳过它，
+            # 否则「SEA 2026 年市场进入策略」这类问题只会返回一行标题。
+            if not sentence.lstrip().startswith("#")
+            and _clean_sentence(sentence) != doc_title
+        ]
         if not candidates:
             fallback = truncate(_clean_sentence(collapse_whitespace(text)), EXTRACTIVE_SENTENCE_CHARS)
             candidates = [fallback] if fallback else []

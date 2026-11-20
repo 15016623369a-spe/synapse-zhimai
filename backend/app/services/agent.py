@@ -23,7 +23,14 @@ logger = logging.getLogger("synapse.agent")
 #: 未登录词（语料里 df=0）不参与覆盖率分母：它们多半是分词边界或同义改写，
 #: 直接按「未命中」计权会把「咖啡粉水比」这类正常问题误判成缺口。
 #: 只有「明确的实体」（英文术语 / 引号词）在语料里完全不存在时，才作为硬缺口。
-GAP_COVERAGE_THRESHOLD = 0.25
+#: 严格缺口（弹「资料有限」并触发联网补充）：覆盖率 + 单句覆盖 + 稀有词同时不足
+GAP_STRICT_COVERAGE = {"zh": 0.25, "en": 0.20}
+GAP_STRICT_SENTENCE = {"zh": 0.15, "en": 0.10}
+#: 弱提示（只提醒「匹配证据较少」，不触发联网）：用于覆盖「证据弱但未必没有」
+GAP_WEAK_COVERAGE = {"zh": 0.40, "en": 0.38}
+GAP_WEAK_SENTENCE = {"zh": 0.22, "en": 0.18}
+GAP_STRICT_RARE_MAX = 2
+GAP_WEAK_RARE_MAX = 3
 GAP_ENTITY_MIN_LEN = 2
 MAX_SEARCH_CALLS = 2
 MAX_TOOL_ROUNDS = 2
@@ -33,6 +40,7 @@ TOOL_CANDIDATE_LIMIT = 8
 _ASCII_ENTITY = re.compile(r"[A-Za-z][A-Za-z0-9_.+-]{1,}")
 _CJK_CHAR = re.compile(r"[\u4e00-\u9fff]")
 _QUOTED_ENTITY = re.compile(r"「([^」]{1,24})」|“([^”]{1,24})”|\"([^\"]{1,24})\"")
+_GAP_SENTENCE_SPLIT = re.compile(r"(?<=[。！？!?；;])\s*|(?<=[.])\s+")
 _ENTITY_STOPWORDS = {
     "the",
     "and",
@@ -158,6 +166,60 @@ def _query_entities(question: str) -> list[str]:
     return list(dict.fromkeys(entities))
 
 
+def _sentence_signal(
+    question_terms: set[str],
+    results: list[dict[str, object]],
+    df,
+    corpus_size: int,
+) -> tuple[float, int]:
+    """返回 top-5 片段里「单句」对问题词的 IDF 覆盖最大值，以及该句命中的稀有词数。
+
+    chunk 级覆盖率会被长片段稀释：一段 600 字的 chunk 里只要零散出现几个词，
+    覆盖率就可能不低；而真正能回答问题的往往是其中一句话。单句覆盖更接近
+    「有没有一句证据能支撑回答」。
+    """
+    if corpus_size <= 0:
+        best = 0.0
+        best_rare = 0
+        for result in results[:5]:
+            for sentence in _GAP_SENTENCE_SPLIT.split(str(result.get("text") or "")):
+                if len(sentence.strip()) < 12:
+                    continue
+                matched = question_terms & set(embedding.tokenize_terms(sentence))
+                if not question_terms:
+                    continue
+                coverage = len(matched) / len(question_terms)
+                if coverage > best:
+                    best = coverage
+                    best_rare = 0
+        return best, best_rare
+
+    in_vocab = [term for term in question_terms if df.get(term, 0) > 0]
+    if not in_vocab:
+        return 0.0, 0
+    total_idf = sum(_term_idf(term, df, corpus_size) for term in in_vocab) or 1.0
+    best = 0.0
+    best_rare = 0
+    for result in results[:5]:
+        for sentence in _GAP_SENTENCE_SPLIT.split(str(result.get("text") or "")):
+            if len(sentence.strip()) < 12:
+                continue
+            sentence_terms = set(embedding.tokenize_terms(sentence))
+            matched = [term for term in in_vocab if term in sentence_terms]
+            coverage = (
+                sum(_term_idf(term, df, corpus_size) for term in matched) / total_idf
+            )
+            rare = sum(
+                1
+                for term in matched
+                if _term_idf(term, df, corpus_size) >= 2.2
+            )
+            if coverage > best:
+                best = coverage
+                best_rare = rare
+    return best, best_rare
+
+
 def detect_gap(
     question: str,
     results: list[dict[str, object]],
@@ -182,9 +244,11 @@ def detect_gap(
     if not results:
         return {
             "needs_more": True,
+            "severity": "gap",
             "reason": "知识库中未找到相关内容",
             "suggested_queries": suggested,
             "coverage": 0.0,
+            "sentence_coverage": 0.0,
         }
 
     question_terms = set(embedding.tokenize_terms(question))
@@ -202,9 +266,11 @@ def detect_gap(
         if missing_entities:
             return {
                 "needs_more": True,
+                "severity": "gap",
                 "reason": f"知识库中没有收录「{missing_entities[0]}」相关资料",
                 "suggested_queries": suggested,
                 "coverage": 0.0,
+                "sentence_coverage": 0.0,
                 "missing_entities": missing_entities[:3],
             }
 
@@ -226,12 +292,48 @@ def detect_gap(
             else 0.0
         )
 
-    if coverage < GAP_COVERAGE_THRESHOLD:
+    language = "zh" if _has_chinese_context(question) else "en"
+    if corpus_size > 0:
+        sentence_coverage, rare_in_sentence = _sentence_signal(
+            question_terms, results, df, corpus_size
+        )
+    else:
+        sentence_coverage, rare_in_sentence = _sentence_signal(
+            question_terms, results, df, 0
+        )
+
+    features = {
+        "coverage": round(coverage, 3),
+        "sentence_coverage": round(sentence_coverage, 3),
+        "rare_in_sentence": rare_in_sentence,
+    }
+
+    # 严格缺口：chunk 覆盖、单句覆盖都低，且没有足够稀有词支撑
+    if (
+        coverage < GAP_STRICT_COVERAGE[language]
+        and sentence_coverage < GAP_STRICT_SENTENCE[language]
+        and rare_in_sentence <= GAP_STRICT_RARE_MAX
+    ):
         return {
             "needs_more": True,
+            "severity": "gap",
             "reason": "知识库中相关段落较少",
             "suggested_queries": suggested,
-            "coverage": round(coverage, 3),
+            **features,
+        }
+
+    # 弱提示：证据偏少但未必没有；只提醒核对引用，不触发联网补充
+    if (
+        coverage < GAP_WEAK_COVERAGE[language]
+        and sentence_coverage < GAP_WEAK_SENTENCE[language]
+        and rare_in_sentence <= GAP_WEAK_RARE_MAX
+    ):
+        return {
+            "needs_more": True,
+            "severity": "weak",
+            "reason": "匹配证据较少，建议核对引用来源",
+            "suggested_queries": suggested,
+            **features,
         }
     return None
 
