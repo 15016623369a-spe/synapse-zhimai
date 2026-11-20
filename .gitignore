@@ -44,3 +44,7 @@ private/
 # 评测数据与隔离状态（可重新生成）
 eval/data/
 eval/state/
+
+# demo 录制状态与原始录像
+demo/state/
+demo/recordings/

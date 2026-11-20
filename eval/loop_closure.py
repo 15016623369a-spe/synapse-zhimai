@@ -191,7 +191,7 @@ def main() -> int:
             scanned += 1
             query = str(item.get("query") or "")
             before = ask(client, query)
-            if not before["gap"]:
+            if not before["gap"] or before["gap"].get("severity") == "weak":
                 continue
             adopted_ids: list[str] = []
             for evidence in item["evidence_list"]:

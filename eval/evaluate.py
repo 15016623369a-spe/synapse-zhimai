@@ -172,6 +172,11 @@ def main() -> int:
                 if expected_set
                 else False
             )
+            complete10 = (
+                bool(expected_set) and expected_set <= set(top_docs)
+                if expected_set
+                else False
+            )
             first_rank = next(
                 (
                     rank
@@ -193,7 +198,9 @@ def main() -> int:
                 if facts
                 else 0.0
             )
-            gap = agent.detect_gap(query, results)
+            gap_info = agent.detect_gap(query, results)
+            strict_gap = bool(gap_info and gap_info.get("severity") != "weak")
+            weak_gap = bool(gap_info and gap_info.get("severity") == "weak")
 
             row = {
                 "query": query,
@@ -201,10 +208,12 @@ def main() -> int:
                 "expected": len(expected_set),
                 "doc_recall@k": round(doc_recall, 4),
                 "complete@5": bool(complete),
+                "complete@10": bool(complete10),
                 "mrr@k": round(mrr, 4),
                 "hit@k": bool(hit),
                 "fact_recall@k": round(fact_recall, 4),
-                "gap": bool(gap),
+                "gap": strict_gap,
+                "weak": weak_gap,
                 "top_docs": top_docs[:5],
             }
             rows.append(row)
@@ -223,6 +232,9 @@ def main() -> int:
                 "complete@5": opt_mean(
                     [1.0 if item["complete@5"] else 0.0 for item in answerable]
                 ),
+                "complete@10": opt_mean(
+                    [1.0 if item["complete@10"] else 0.0 for item in answerable]
+                ),
                 "mrr@k": opt_mean([item["mrr@k"] for item in answerable]),
                 "hit@k": opt_mean([1.0 if item["hit@k"] else 0.0 for item in answerable]),
                 "fact_recall@k": opt_mean(
@@ -232,9 +244,15 @@ def main() -> int:
                 "gap_false_positive": opt_mean(
                     [1.0 if item["gap"] else 0.0 for item in answerable]
                 ),
+                "weak_false_positive": opt_mean(
+                    [1.0 if item["weak"] else 0.0 for item in answerable]
+                ),
                 "null_questions": len(nulls),
                 "null_abstain": opt_mean(
                     [1.0 if item["gap"] else 0.0 for item in nulls]
+                ),
+                "null_flagged": opt_mean(
+                    [1.0 if (item["gap"] or item["weak"]) else 0.0 for item in nulls]
                 ),
             }
 
@@ -279,11 +297,14 @@ def main() -> int:
         "questions",
         "doc_recall@k",
         "complete@5",
+        "complete@10",
         "mrr@k",
         "hit@k",
         "fact_recall@k",
         "gap_false_positive",
+        "weak_false_positive",
         "null_abstain",
+        "null_flagged",
     ):
         cells = [fmt(report["overall"].get(key, ""))]
         cells += [fmt(report["by_type"][name].get(key, "")) for name in report["by_type"]]

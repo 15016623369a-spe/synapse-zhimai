@@ -2,9 +2,9 @@
   "metric": "Loop Closure Rate (LCR)",
   "definition": "采纳后由 gap 变为可答的题数 / 触发 gap 且完成采纳的题数",
   "attempts": 20,
-  "flipped": 15,
-  "lcr": 0.75,
-  "cited_new_doc_rate": 0.85,
+  "flipped": 17,
+  "lcr": 0.85,
+  "cited_new_doc_rate": 0.9,
   "results": [
     {
       "question": "Who is the individual associated with the cryptocurrency industry facing a criminal trial on fraud and conspiracy charges, as reported by both The Verge and TechCrunch, and is accused by prosecutors of committing fraud for personal gain?",
@@ -34,8 +34,8 @@
       "flipped": true
     },
     {
-      "question": "Do 'The Verge' and 'Engadget' articles both suggest that 'Consumers' have guides or opportunities to make better purchasing decisions, while 'TechCrunch' discusses 'Consumers' desire for a new model in a different sector?",
-      "type": "comparison_query",
+      "question": "Which company, covered by Engadget and Polygon, is set to release an updated gaming hardware with over 300 improvements on November 16, emphasizing a singular performance target for developers?",
+      "type": "inference_query",
       "adopted": 3,
       "gap_before": true,
       "gap_after": null,
@@ -49,27 +49,20 @@
       "gap_before": true,
       "gap_after": {
         "needs_more": true,
+        "severity": "gap",
         "reason": "知识库中没有收录「gpt-4」相关资料",
         "suggested_queries": [
           "Does the TechCrunch article on GPT-4 suggest a greater ease of prompting toxic output compared to other models while the",
           "Does TechCrunch article GPT-4 suggest"
         ],
         "coverage": 0.0,
+        "sentence_coverage": 0.0,
         "missing_entities": [
           "gpt-4"
         ]
       },
       "cited_new_doc": false,
       "flipped": false
-    },
-    {
-      "question": "Did The Independent - Sports report on the All Blacks' home victories against Ireland, South Africa, and Argentina last summer on October 14, 2023, and did The Roar | Sports Writers Blog report on Argentina's victories over the All Blacks in Christchurch last year and their first victory in 2020 in Sydney on October 18, 2023, making the reporting on the All Blacks' defeats by Argentina consistent?",
-      "type": "temporal_query",
-      "adopted": 2,
-      "gap_before": true,
-      "gap_after": null,
-      "cited_new_doc": true,
-      "flipped": true
     },
     {
       "question": "Does the Sporting News article claim that Caesars Sportsbook offers a cash-out option for early bet settlement, while the CBSSports.com and the second Sporting News article both focus on Caesars Sportsbook providing a welcome bonus offer for new customers?",
@@ -81,26 +74,8 @@
       "flipped": true
     },
     {
-      "question": "Does the TechCrunch article on generative AI in the enterprise suggest that CIOs are more cautious in their AI adoption strategy compared to the belief of business leaders mentioned in another TechCrunch article, who think AI will be essential for all businesses within five years?",
-      "type": "comparison_query",
-      "adopted": 2,
-      "gap_before": true,
-      "gap_after": null,
-      "cited_new_doc": true,
-      "flipped": true
-    },
-    {
       "question": "What company, recently reported by TechCrunch to have made significant profitability in the third quarter, has also faced criticism for not adequately preventing incidents and streamlining driver sign-ups, despite being aware of safety concerns since 2014 and introducing new app features to address them?",
       "type": "inference_query",
-      "adopted": 2,
-      "gap_before": true,
-      "gap_after": null,
-      "cited_new_doc": true,
-      "flipped": true
-    },
-    {
-      "question": "Does the TechCrunch article suggest that Sam Altman is involved in a new venture, while the Fortune article discusses the roles of Matt Huang and Gary Wang in the context of venture capital and FTX, without indicating any new venture involvement for them?",
-      "type": "comparison_query",
       "adopted": 2,
       "gap_before": true,
       "gap_after": null,
@@ -117,74 +92,13 @@
       "flipped": true
     },
     {
-      "question": "Which player, known for influencing Argentina's forward line with a youth movement including Julian Alvarez and Alejandro Garnacho, recently returned to play for Inter Miami and is expected to participate in their match after a period of injury, according to reports from Sporting News?",
-      "type": "inference_query",
-      "adopted": 2,
-      "gap_before": true,
-      "gap_after": null,
-      "cited_new_doc": true,
-      "flipped": true
-    },
-    {
-      "question": "Does the TalkSport article suggest that Manchester United's defensive performance in the Champions League group stages is worse than in previous years, as indicated by a new record for goals conceded, while The Guardian article implies that Manchester United's overall performance under pressure in the Champions League, especially in Istanbul, has been consistently poor?",
-      "type": "comparison_query",
-      "adopted": 2,
-      "gap_before": true,
-      "gap_after": null,
-      "cited_new_doc": true,
-      "flipped": true
-    },
-    {
-      "question": "Does the Sporting News article anticipate an impressive performance in the upcoming home game for Jordan Love, while the CBSSports.com article reflects on Kirk Cousins' performance in last week's game with only 13 Fantasy points?",
-      "type": "comparison_query",
-      "adopted": 2,
-      "gap_before": true,
-      "gap_after": null,
-      "cited_new_doc": true,
-      "flipped": true
-    },
-    {
       "question": "What is the name of the company that was discussed on TechCrunch for removing AI-created songs and introducing an AI-powered DJ feature, and was also mentioned on The Verge for achieving its first operating profit in a year, leading to a significant rise in its stock value?",
       "type": "inference_query",
       "adopted": 2,
       "gap_before": true,
-      "gap_after": {
-        "needs_more": true,
-        "reason": "知识库中相关段落较少",
-        "suggested_queries": [
-          "What is the name of the company that was discussed on TechCrunch for removing AI-created songs and introducing an AI-pow",
-          "What name company that was"
-        ],
-        "coverage": 0.163
-      },
-      "cited_new_doc": true,
-      "flipped": false
-    },
-    {
-      "question": "Between the TechCrunch report on Meta's moderation bias problem suppressing Palestinian voices published on October 19, 2023, and the TechCrunch report on Meta's perfect compliance with the Children’s Online Privacy Protection Act published on November 27, 2023, was there a change in the nature of issues reported concerning Meta's platform practices?",
-      "type": "temporal_query",
-      "adopted": 2,
-      "gap_before": true,
       "gap_after": null,
       "cited_new_doc": true,
       "flipped": true
-    },
-    {
-      "question": "Which football club, recently discussed in articles from 'The Guardian', 'The Roar | Sports Writers Blog', and 'BBC News - Entertainment & Arts', had a significant change in league position due to a points penalty after a series of wins, and is recognized for its history and community importance as emphasized by Farhad Moshiri following an introduction by its late chairman Bill Kenwright?",
-      "type": "inference_query",
-      "adopted": 3,
-      "gap_before": true,
-      "gap_after": {
-        "needs_more": true,
-        "reason": "知识库中相关段落较少",
-        "suggested_queries": [
-          "Which football club recently discussed in articles from 'The Guardian' 'The Roar | Sports Writers Blog' and 'BBC News -",
-          "Which football club recently discussed"
-        ],
-        "coverage": 0.095
-      },
-      "cited_new_doc": false,
-      "flipped": false
     },
     {
       "question": "Does the article from Wired suggest that Sony headphones do not offer the best value in their class during the Walmart Cyber Monday Deals, while the article from Music Business Worldwide indicates that Artists are seeking deals that offer more control and better economics, or do both articles suggest a common trend in seeking value and control in their respective fields?",
@@ -200,34 +114,112 @@
       "type": "comparison_query",
       "adopted": 2,
       "gap_before": true,
+      "gap_after": null,
+      "cited_new_doc": true,
+      "flipped": true
+    },
+    {
+      "question": "What institution, frequently mentioned in articles from The Sydney Morning Herald, is the focal point of investors' hopes regarding a halt to rising interest rates and has the power to significantly impact global financial markets based on economic data?",
+      "type": "inference_query",
+      "adopted": 3,
+      "gap_before": true,
       "gap_after": {
         "needs_more": true,
+        "severity": "gap",
         "reason": "知识库中相关段落较少",
         "suggested_queries": [
-          "Does the Polygon article suggest that Martin Scorsese has less autonomy in his filmmaking choices compared to earlier in",
-          "Does Polygon article suggest that"
+          "What institution frequently mentioned in articles from The Sydney Morning Herald is the focal point of investors' hopes",
+          "What institution frequently mentioned articles"
         ],
-        "coverage": 0.238
+        "coverage": 0.144,
+        "sentence_coverage": 0.048,
+        "rare_in_sentence": 1
       },
-      "cited_new_doc": true,
+      "cited_new_doc": false,
       "flipped": false
     },
     {
-      "question": "Does the Sporting News article credit Will Lutz with making a successful field goal, while The New York Times article discusses Connor Bedard's efforts to understand goalies, indicating a focus on different aspects of performance in football and hockey respectively?",
+      "question": "After The Verge reported on September 26, 2023, that Apple defended its Google Search deal by stating there wasn't a valid alternative, and TechCrunch later reported on November 13, 2023, that Google spent $26.3 billion in 2021 to secure its position as the default search engine on various platforms, does the rationale provided by Apple for its Google Search deal remain consistent with Google's aggressive spending to maintain default search engine status across platforms? (The Verge/TechCrunch)",
+      "type": "temporal_query",
+      "adopted": 2,
+      "gap_before": true,
+      "gap_after": null,
+      "cited_new_doc": true,
+      "flipped": true
+    },
+    {
+      "question": "Does the Engadget article on the Artificial Intelligence Advancement Act of 2023 suggest that the act will not initiate reports on AI regulation and data sharing, while the other Engadget article on the executive order implies that the new reporting requirement will not impact existing AI models and AI companies due to a high threshold for enforcement?",
+      "type": "comparison_query",
+      "adopted": 2,
+      "gap_before": true,
+      "gap_after": null,
+      "cited_new_doc": true,
+      "flipped": true
+    },
+    {
+      "question": "Does the article from The Age suggest that the economic conditions of people have worsened, impacting the middle class and their shopping habits, in contrast to Engadget's focus on providing Engadget readers with updates on Black Friday deals without discussing the economic conditions?",
+      "type": "comparison_query",
+      "adopted": 2,
+      "gap_before": true,
+      "gap_after": null,
+      "cited_new_doc": true,
+      "flipped": true
+    },
+    {
+      "question": "Did Sporting News fail to indicate a similar issue with Williams and Rice's attempt at a deep shot in the USC vs. Notre Dame game on October 14th after CBSSports.com reported on the Dallas Cowboys' offensive strategy involving deeper passes on October 12th?",
+      "type": "temporal_query",
+      "adopted": 2,
+      "gap_before": true,
+      "gap_after": null,
+      "cited_new_doc": true,
+      "flipped": true
+    },
+    {
+      "question": "Is the reporting on the Northern Lights visibility in the UK by 'The Independent - Travel' inconsistent with the observations of the aurora borealis reported by 'Live Science: The Most Interesting Articles' between November 9, 2023, and December 21, 2023?",
+      "type": "temporal_query",
+      "adopted": 2,
+      "gap_before": true,
+      "gap_after": null,
+      "cited_new_doc": true,
+      "flipped": true
+    },
+    {
+      "question": "Does the article from FOX News - Entertainment suggest that Arnold Schwarzenegger and Reese Witherspoon advocate for a similar parenting style, as opposed to the article from The Independent - Life and Style which discusses the issue of parental controls with Roblox?",
+      "type": "comparison_query",
+      "adopted": 2,
+      "gap_before": true,
+      "gap_after": null,
+      "cited_new_doc": true,
+      "flipped": true
+    },
+    {
+      "question": "Did the article from 'The Roar | Sports Writers Blog' attribute the JackJumpers' significant comeback to a specific scoring run, and does the 'Sporting News' article credit the Pakistan cricket team's historic victory to a comeback in the tournament?",
       "type": "comparison_query",
       "adopted": 2,
       "gap_before": true,
       "gap_after": {
         "needs_more": true,
-        "reason": "知识库中相关段落较少",
+        "severity": "weak",
+        "reason": "匹配证据较少，建议核对引用来源",
         "suggested_queries": [
-          "Does the Sporting News article credit Will Lutz with making a successful field goal while The New York Times article dis",
-          "Does Sporting News article credit"
+          "Did the article from 'The Roar | Sports Writers Blog' attribute the JackJumpers' significant comeback to a specific scor",
+          "Did article from Roar Sports"
         ],
-        "coverage": 0.168
+        "coverage": 0.316,
+        "sentence_coverage": 0.106,
+        "rare_in_sentence": 2
       },
-      "cited_new_doc": false,
+      "cited_new_doc": true,
       "flipped": false
+    },
+    {
+      "question": "After The Independent - Life and Style reported on Britney Spears' forced lithium intake on October 18, 2023, did The Guardian's report on October 24, 2023, regarding Britney Spears' experiences at the age of 16 maintain consistency in the narrative of her struggles with autonomy and public scrutiny?",
+      "type": "temporal_query",
+      "adopted": 2,
+      "gap_before": true,
+      "gap_after": null,
+      "cited_new_doc": true,
+      "flipped": true
     }
   ]
 }

@@ -3,14 +3,14 @@
 This is a sanitized summary; detailed logs and personal screenshots are kept
 locally under `private/` and are not part of the open-source repository.
 
-## v2.5（2026-11-20）
+## v2.6（2026-11-20）
 
 | Check | Result |
 |---|---|
-| Backend pytest（断网） | **361 passed / 1 skipped** |
-| MultiHop-RAG 全量 2556 题（可答题 2254） | doc hit@10 **0.778** / doc recall@10 **0.472** / MRR@10 **0.549** |
-| MultiHop-RAG null_query（301 题） | 拒答 **0.705**；可答题 gap 误报 **0.365** |
-| 闭环收敛率 LCR（20 题） | **15/20 = 75%**；复问引用新文档 17/20 |
+| Backend pytest（断网） | **362 passed / 1 skipped** |
+| MultiHop-RAG 全量 2556 题（可答题 2254） | doc hit@10 **0.827** / doc recall@10 **0.544** / MRR@10 **0.584** / complete@10 **0.275** |
+| MultiHop-RAG null_query（301 题） | 强缺口 **0.315**；含弱提示标记 **0.861**；可答题 gap 误报 **0.097** |
+| 闭环收敛率 LCR（20 题） | **17/20 = 85%**；复问引用新文档 18/20 |
 | 前端 typecheck / build | 0 errors / 构建成功 |
 
 复现：
@@ -22,6 +22,16 @@ backend/.venv/bin/python eval/loop_closure.py --questions 20
 ```
 
 详细口径、逐题型拆分与失败分析见 [EVAL.md](EVAL.md)。
+
+## v2.5（2026-11-20）
+
+| Check | Result |
+|---|---|
+| Backend pytest（断网） | **361 passed / 1 skipped** |
+| MultiHop-RAG 全量 2556 题（可答题 2254） | doc hit@10 **0.778** / doc recall@10 **0.472** / MRR@10 **0.549** |
+| MultiHop-RAG null_query（301 题） | 拒答 **0.705**；可答题 gap 误报 **0.365** |
+| 闭环收敛率 LCR（20 题） | **15/20 = 75%**；复问引用新文档 17/20 |
+| 前端 typecheck / build | 0 errors / 构建成功 |
 
 ## v2.4（2026-11-20）
 
