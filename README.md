@@ -287,6 +287,7 @@ synapse/
 ├── frontend/           React + Vite 单页应用
 │   └── src/{views,components,lib}/...   # 含 plans/ 计划页与分区图谱
 ├── data/               演示知识库（Markdown）与评测问题
+├── eval/                MultiHop-RAG 公开基准评测 + 闭环收敛率（隔离数据目录）
 ├── scripts/            端到端自检、检索评估、OpenAI 兼容 mock LLM
 ├── SPEC.md             产品规格 + API 契约（开发用）
 ├── start.sh / dev.sh   一键启动 / 开发模式
@@ -350,7 +351,7 @@ cd frontend && npm run typecheck && npm run build
 
 | 检查 | 结果 |
 |---|---|
-| 后端 pytest（断网） | **359 passed / 1 skipped** |
+| 后端 pytest（断网） | **361 passed / 1 skipped** |
 | API 契约自检 | **54 / 54 PASS**（v2.4 新增引用/缺口检查） |
 | 演示问题检索 | **10/10 命中**，关键词覆盖 81%（doc hit-rate，非通用准确率） |
 | 多格式入库 | **5 / 5 成功且可检索** |
@@ -370,6 +371,30 @@ cd frontend && npm run typecheck && npm run build
 
 ---
 
+## 公开基准评测（MultiHop-RAG）
+
+效果不再用「10 题演示集」证明。在公开基准 [MultiHop-RAG](https://huggingface.co/datasets/yixuantt/MultiHopRAG)（ODC-BY，609 篇英文新闻 / 2556 题）上：
+
+| 指标 | 结果 | 说明 |
+|---|---:|---|
+| doc hit@10（可答题） | **77.8%** | top-10 至少命中一篇期望文档 |
+| doc recall@10（可答题） | **47.2%** | 多证据题取平均；随机基线 ≈ 1.6% |
+| MRR@10（可答题） | **54.9%** | 第一篇期望文档的排名 |
+| null 题拒答 | **70.5%** | 301 道「语料里没有答案」的题 |
+| 闭环收敛率 LCR | **75%**（15/20） | 采纳外部知识后由「答不上」变「答得上」 |
+
+题型拆分、失败分析、已知限制见 [docs/EVAL.md](docs/EVAL.md)；一键复现：
+
+```bash
+backend/.venv/bin/python eval/prepare.py
+backend/.venv/bin/python eval/evaluate.py --all
+backend/.venv/bin/python eval/loop_closure.py --questions 20
+```
+
+> 这是英文新闻语料的压力测试，不等于中文个人笔记场景表现；10 题 demo 集只保留为回归冒烟。
+
+---
+
 ## 已知限制
 
 Synapse 是单用户、本机优先的工具，不是生产级多租户服务。以下限制是刻意保留的取舍，使用前请确认：
@@ -377,7 +402,7 @@ Synapse 是单用户、本机优先的工具，不是生产级多租户服务。
 - **无登录 / 多租户**：默认只绑定 `127.0.0.1`，不要直接映射公网；远程访问需要 VPN 或带认证的反向代理。
 - **默认向量是词法哈希**：`hash` 模式是 jieba 词 + 字 bigram 的 384 维哈希，同义句余弦接近 0（「如何提高检索召回率」vs「怎么让搜索找到更多相关内容」实测 0.00）。它的价值是零配置、离线可用，不是语义理解；需要语义检索请在设置里切 `fastembed` 或 OpenAI 兼容 embeddings，并重建向量。
 - **没有向量索引**：每次查询把全部 chunk 读出来算 BM25 + cosine；1–2k chunk 时 35–60ms，万级 chunk 需要引入 FTS5 / sqlite-vec / FAISS。
-- **评测规模小**：演示集只有 10 题 / 16 篇文档，且 16 篇取 top-8 的随机命中率约 70%，所以 90% 只能当回归趋势，不能当效果证明；`scripts/eval_retrieval.py` 已能复现 recall/MRR，但 before 基线（v2.3 内部脚本）不在仓库里。扩展到 60 题 + chunk 级指标的计划见 [docs/EVAL.md](docs/EVAL.md)（第 3 节为计划，不是结果）。
+- **公开基准数字不算高**：MultiHop-RAG 全量 2556 题上 doc recall@10 47.2%、null 拒答 70.5%、gap 误报 36.5%；英文新闻语料对中文分词与阈值不友好，`complete@5` 只有 12.3%。10 题 demo 集（16 篇取 top-8，随机命中约 70%）只做回归冒烟。完整分析与下一步见 [docs/EVAL.md](docs/EVAL.md)。
 - **引用校验是保守的 `[n]` 映射**：只保证「回答引用的编号存在于检索结果」，不做 claim-level 的 NLI/忠实度校验；模型仍可能误用某条资料。
 - **联网扩展依赖外网**：SSRF 防护会拒绝内网/回环地址；离线环境只能走内置 mock provider，且 mock 候选可能被相关性过滤掉。
 - **计划打卡与知识库无耦合**：它是独立的小模块，不参与 RAG；只看知识库能力时可以忽略。
@@ -402,6 +427,7 @@ Synapse 的灵感来自 [DocsGPT](https://github.com/arc53/DocsGPT)：同样把�
 
 ## 更新日志
 
+- **v2.5（2026-11-20）**：公开基准评测——MultiHop-RAG（609 篇 / 2556 题）可答题 doc hit@10 **77.8%**、doc recall@10 **47.2%**、MRR **0.549**、null 拒答 **70.5%**；新增闭环收敛率 LCR 评测（**15/20 = 75%**）；检索支持英文对比意图与多跳文档多样性（multi/compare/set 每篇只取 1 个片段）；英文疑问词进停用词；新增双语测试，全量 **361 tests**。
 - **v2.4（2026-11-20）**：闭环可信度修复——缺口检测不再把分词边界误判为缺知识（「咖啡粉水比」不再弹「资料有限」）；引用面板只展示回答里实际出现的 `[n]`，幻觉编号进 `invalid_citations`；低相关片段在进入上下文前过滤（相对 Top-1 + 绝对下限）；文档级引用不再伪造 0.99 分；引用展示改为 高/中/低匹配 + 排名；测试全面禁网（`conftest` 阻断外网 socket），断网 `pytest` **359 passed / 1 skipped**；`documents/url` 补齐逐跳 SSRF 校验；补 `SPEC.md`、`docs/EVAL.md` 与「已知限制」。
 - **v2.3（2026-11-17）**：RAG 完整召回优化——文档级两阶段检索 + 查询意图路由（set/compare/multi/fact）+ 确定性多查询；完整召回@8 77%→90%、Q9 1/5→5/5、Q8 1/5→3/5，单文档 Top-1 不退化；全量 342 tests。
 - **v2.2（2026-11-17）**：MCP 工具卡新增「添加工具」——「AI 帮我配」从受控目录推荐配置（不自动执行/安装）+ 手动注册 stdio MCP Server；测试连接、工具白名单、启用/删除；全量 325 tests。

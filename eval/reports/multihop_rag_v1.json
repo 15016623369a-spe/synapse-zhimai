@@ -1,0 +1,70 @@
+{
+  "dataset": "MultiHop-RAG",
+  "license": "ODC-BY",
+  "top_k": 10,
+  "sample": 2556,
+  "seed": 42,
+  "elapsed_seconds": 937.1,
+  "overall": {
+    "questions": 2556,
+    "doc_recall@k": 0.4716,
+    "complete@5": 0.1233,
+    "mrr@k": 0.549,
+    "hit@k": 0.7777,
+    "fact_recall@k": 0.1623,
+    "answerable": 2254,
+    "gap_false_positive": 0.3647,
+    "null_questions": 302,
+    "null_abstain": 0.7053
+  },
+  "by_type": {
+    "inference_query": {
+      "questions": 816,
+      "doc_recall@k": 0.3216,
+      "complete@5": 0.0172,
+      "mrr@k": 0.435,
+      "hit@k": 0.6699,
+      "fact_recall@k": 0.1313,
+      "answerable": 815,
+      "gap_false_positive": 0.5399,
+      "null_questions": 1,
+      "null_abstain": 1.0
+    },
+    "comparison_query": {
+      "questions": 856,
+      "doc_recall@k": 0.5572,
+      "complete@5": 0.1834,
+      "mrr@k": 0.6145,
+      "hit@k": 0.8435,
+      "fact_recall@k": 0.2142,
+      "answerable": 856,
+      "gap_false_positive": 0.2535,
+      "null_questions": 0,
+      "null_abstain": null
+    },
+    "null_query": {
+      "questions": 301,
+      "doc_recall@k": null,
+      "complete@5": null,
+      "mrr@k": null,
+      "hit@k": null,
+      "fact_recall@k": null,
+      "answerable": 0,
+      "gap_false_positive": null,
+      "null_questions": 301,
+      "null_abstain": 0.7043
+    },
+    "temporal_query": {
+      "questions": 583,
+      "doc_recall@k": 0.5555,
+      "complete@5": 0.1835,
+      "mrr@k": 0.612,
+      "hit@k": 0.8319,
+      "fact_recall@k": 0.1295,
+      "answerable": 583,
+      "gap_false_positive": 0.283,
+      "null_questions": 0,
+      "null_abstain": null
+    }
+  }
+}
