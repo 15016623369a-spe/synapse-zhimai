@@ -41,7 +41,7 @@ def relevant_snippet(query: str, text: str, limit: int = 280) -> str:
     sentences = [
         sentence.strip()
         for sentence in _SENTENCE_BOUNDARY.split(compact)
-        if sentence.strip()
+        if sentence.strip() and not sentence.lstrip().startswith("#")
     ]
     if not sentences:
         return make_snippet(compact, limit)
@@ -391,6 +391,46 @@ def _doc_score_for_variant(
 # ---------------------------------------------------------------------------
 
 
+def _round_robin_docs(
+    doc_query_scores: dict[str, dict[int, float]],
+    variant_count: int,
+    doc_limit: int,
+    floor_ratio: float,
+) -> list[str]:
+    """多跳/对比：按子查询轮流取文档，保证 top-5 覆盖每个子问题。
+
+    只按全局 max/mean 排序时，长问题的主句会占满前面几名，第二个子问题的
+    证据文档排到 6-8 名，complete@5 永远上不去。轮流取能保证每个子查询的
+    首选文档都进前排。
+    """
+    queues: list[list[str]] = []
+    for variant_index in range(variant_count):
+        items = [
+            (doc_id, scores[variant_index])
+            for doc_id, scores in doc_query_scores.items()
+            if variant_index in scores
+        ]
+        if not items:
+            continue
+        items.sort(key=lambda item: (-item[1], item[0]))
+        floor = items[0][1] * floor_ratio
+        queues.append([doc_id for doc_id, score in items if score >= floor][:doc_limit])
+    picked: list[str] = []
+    seen: set[str] = set()
+    for rank in range(doc_limit):
+        for queue in queues:
+            if rank >= len(queue):
+                continue
+            doc_id = queue[rank]
+            if doc_id in seen:
+                continue
+            seen.add(doc_id)
+            picked.append(doc_id)
+            if len(picked) >= doc_limit:
+                return picked
+    return picked
+
+
 def search_chunks(
     conn,
     query: str,
@@ -477,9 +517,15 @@ def search_chunks(
     min_docs = MIN_DOCS.get(mode, MIN_DOCS["fact"])
     top_score = doc_scores[ranked_docs[0]]
     floor = top_score * DOC_SCORE_FLOOR
-    selected_docs = [doc_id for doc_id in ranked_docs if doc_scores[doc_id] >= floor][
-        :doc_limit
-    ]
+    selected_docs: list[str] = []
+    if mode in {"multi", "compare"} and len(expanded_queries) > 1:
+        selected_docs = _round_robin_docs(
+            doc_query_scores, len(expanded_queries), doc_limit, DOC_SCORE_FLOOR
+        )
+    if not selected_docs:
+        selected_docs = [doc_id for doc_id in ranked_docs if doc_scores[doc_id] >= floor][
+            :doc_limit
+        ]
     if not selected_docs:
         selected_docs = ranked_docs[:1]
     # 至少 min_docs（在存在候选的文档范围内）

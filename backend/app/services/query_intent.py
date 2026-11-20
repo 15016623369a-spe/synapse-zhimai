@@ -44,6 +44,10 @@ _COMPARE_SPLIT_RE = re.compile(
 _MULTI_SPLIT_RE = re.compile(
     r"(?:并|同时|以及|分别|各自|结合|关系|联系)"
 )
+#: 英文多跳题的切分：分号、问号、"; while/and/whereas/but"，以及长句里的 and
+_EN_MULTI_SPLIT_RE = re.compile(
+    r";\s*|\?\s*|,\s*(?:and|while|whereas|but|then)\s+|\s+(?:while|whereas)\s+"
+)
 _LEADING_NOISE_RE = re.compile(
     r"^(?:请|请问|帮我|帮忙|麻烦|我想知道|我想问|想知道|请问一下|你好|嗯|那么|还有)"
 )
@@ -164,7 +168,25 @@ def _multi_segments(question: str) -> list[str]:
         for part in parts
         if part and len(part) >= 2 and part not in _GENERIC_TERMS
     ]
+    if len(segments) <= 1 and _is_english_dominant(text):
+        # 英文多跳题：按分号 / 逗号+连接词 / while 切子问题。
+        # 每个子问题单独检索后再 RRF 合并，避免「四篇证据只看主句」。
+        english_parts = [
+            _clean_clause(part)
+            for part in _EN_MULTI_SPLIT_RE.split(text)
+        ]
+        segments = [
+            part
+            for part in english_parts
+            if len(part) >= 25 and part not in _GENERIC_TERMS
+        ]
     return segments[:3]
+
+
+def _is_english_dominant(text: str) -> bool:
+    latin = len(re.findall(r"[A-Za-z]", text))
+    cjk = len(re.findall(r"[\u4e00-\u9fff]", text))
+    return latin >= 20 and cjk < latin * 0.2
 
 
 def expand_queries(question: str, mode: str | None = None) -> list[str]:
