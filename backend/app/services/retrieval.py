@@ -396,7 +396,7 @@ def search_chunks(
     query: str,
     top_k: int | None = None,
     doc_ids: list[str] | None = None,
-    max_per_doc: int | None = MAX_CHUNKS_PER_DOC,
+    max_per_doc: int | None = None,
 ) -> list[dict[str, object]]:
     query = (query or "").strip()
     if not query:
@@ -406,12 +406,14 @@ def search_chunks(
         return []
 
     limit = clamp_top_k(top_k)
+    mode = query_intent.classify_query(query)
     if max_per_doc is None:
-        per_doc_limit = MAX_CHUNKS_PER_DOC
+        # 多跳 / 对比 / 穷举题优先保证「文档覆盖」，每篇只取 1 个片段；
+        # 单文档事实题仍取 2 个片段，给生成更多上下文。
+        per_doc_limit = 1 if mode in {"multi", "compare", "set"} else MAX_CHUNKS_PER_DOC
     else:
         per_doc_limit = max(1, min(int(max_per_doc), MAX_TOP_K))
 
-    mode = query_intent.classify_query(query)
     expanded_queries = query_intent.expand_queries(query, mode)
 
     token_lists = [embedding.chunk_terms(chunk["text"]) for chunk in chunks]

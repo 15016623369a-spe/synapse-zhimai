@@ -31,6 +31,7 @@ TOOL_MAX_RESULTS = 5
 TOOL_CANDIDATE_LIMIT = 8
 
 _ASCII_ENTITY = re.compile(r"[A-Za-z][A-Za-z0-9_.+-]{1,}")
+_CJK_CHAR = re.compile(r"[\u4e00-\u9fff]")
 _QUOTED_ENTITY = re.compile(r"「([^」]{1,24})」|“([^”]{1,24})”|\"([^\"]{1,24})\"")
 _ENTITY_STOPWORDS = {
     "the",
@@ -107,6 +108,15 @@ TOOL_SYSTEM_PROMPT = (
 )
 
 
+def _has_chinese_context(text: str) -> bool:
+    """问题是否以中文为主（用于决定英文词是否按「专有名词」处理）。"""
+    cjk = len(_CJK_CHAR.findall(text))
+    latin = len(re.findall(r"[A-Za-z]", text))
+    if cjk < 2:
+        return False
+    return cjk / max(cjk + latin, 1) >= 0.25
+
+
 def _query_entities(question: str) -> list[str]:
     """提取问题里的「硬实体」：英文术语与引号词（去重、小写）。
 
@@ -114,6 +124,11 @@ def _query_entities(question: str) -> list[str]:
     而普通中文词的未登录更可能是分词边界（如「咖啡粉水比」被切成「咖啡粉 / 水比」），
     不能当作缺口证据。
     """
+    # 中文语境里夹的英文词多半是专有名词（Transformer / V60 / BP）；
+    # 整句英文里每个词都是普通词，不能按「长词 = 实体」处理，否则 who/what/
+    # about 全会被当成知识库缺词（MultiHop-RAG 上 gap 误报 69% 就是这么来的）。
+    chinese_context = _has_chinese_context(question)
+
     entities: list[str] = []
     for match in _ASCII_ENTITY.finditer(question):
         raw = match.group(0).strip("._+-")
@@ -122,19 +137,24 @@ def _query_entities(question: str) -> list[str]:
             continue
         if token in _ENTITY_STOPWORDS or token in _GENERIC_ACRONYMS:
             continue
-        # 只有「标识符形状」的词才算硬实体：带数字（V60/Z2）、长词（Transformer）、
-        # 或全大写缩写（BP）；小写短词（ai/rag）交给覆盖率判断。
-        looks_like_identifier = (
-            any(char.isdigit() for char in token)
-            or len(token) >= 5
-            or (raw.isupper() and len(raw) >= 2)
-        )
+        if chinese_context:
+            # 只有「标识符形状」的词才算硬实体：带数字（V60/Z2）、长词（Transformer）、
+            # 或全大写缩写（BP）；小写短词（ai/rag）交给覆盖率判断。
+            looks_like_identifier = (
+                any(char.isdigit() for char in token)
+                or len(token) >= 5
+                or (raw.isupper() and len(raw) >= 2)
+            )
+        else:
+            # 纯英文问题：只把带数字的型号当硬实体（GPT-4 / V60），其余交给覆盖率。
+            looks_like_identifier = any(char.isdigit() for char in token)
         if looks_like_identifier:
             entities.append(token)
-    for match in _QUOTED_ENTITY.finditer(question):
-        token = next((group for group in match.groups() if group), "").strip()
-        if token:
-            entities.append(token.lower())
+    if chinese_context:
+        for match in _QUOTED_ENTITY.finditer(question):
+            token = next((group for group in match.groups() if group), "").strip()
+            if token:
+                entities.append(token.lower())
     return list(dict.fromkeys(entities))
 
 

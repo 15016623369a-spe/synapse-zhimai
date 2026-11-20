@@ -301,6 +301,9 @@ STOPWORDS: frozenset[str] = frozenset(
         "not", "no", "can", "will", "would", "should", "could", "have", "has",
         "had", "do", "does", "did", "about", "into", "over", "more", "most",
         "other", "some", "such", "than", "too", "very", "just", "also",
+        # 英文疑问词 / 引述词（英文问题里几乎必出现，作为检索信号是噪声）
+        "who", "whom", "whose", "what", "which", "when", "where", "why", "how",
+        "whether", "according", "versus", "vs",
     }
 )
 

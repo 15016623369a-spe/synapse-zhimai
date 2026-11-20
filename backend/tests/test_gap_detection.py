@@ -17,7 +17,7 @@ from collections import Counter
 import pytest
 from fastapi.testclient import TestClient
 
-from app.services import agent
+from app.services import agent, embedding
 
 from .conftest import chat_events, events_by_name, joined_deltas, seed_corpus
 
@@ -45,6 +45,24 @@ def test_query_entities_extracts_ascii_and_quoted() -> None:
     assert "置信传播" in entities
     # 普通中文词不会被当成硬实体
     assert agent._query_entities("我的手冲咖啡粉水比是多少？") == []
+
+
+def test_english_question_does_not_treat_words_as_entities() -> None:
+    """整句英文里每个词都是普通词，不能按「长词 = 硬实体」处理。"""
+    assert agent._query_entities(
+        "Who is the individual associated with the cryptocurrency industry?"
+    ) == []
+    # 带数字的型号仍然算硬实体
+    assert agent._query_entities("Was GPT-4 mentioned in the article?") == ["gpt-4"]
+
+
+def test_english_question_words_are_stopwords() -> None:
+    terms = embedding.tokenize_terms(
+        "Who is the individual associated with the cryptocurrency industry?"
+    )
+    assert "who" not in terms
+    assert "the" not in terms
+    assert "cryptocurrency" in terms
 
 
 def test_gap_ignores_oov_segmentation_noise(monkeypatch: pytest.MonkeyPatch) -> None:

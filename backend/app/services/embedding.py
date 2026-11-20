@@ -127,7 +127,7 @@ def tokenize_terms(text: str) -> list[str]:
     return terms
 
 
-@lru_cache(maxsize=4096)
+@lru_cache(maxsize=16384)
 def _cached_terms(text: str) -> tuple[str, ...]:
     return tuple(tokenize_terms(text))
 

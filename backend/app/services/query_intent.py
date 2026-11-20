@@ -27,6 +27,9 @@ SET_KEYWORDS: tuple[str, ...] = (
 COMPARE_KEYWORDS: tuple[str, ...] = (
     "区别", "差异", "对比", "相比", "优缺点", "异同", "哪个好", "vs", "比较",
     "不同", "差别",
+    # 英文对比题（MultiHop-RAG comparison_query 常见）
+    "compare", "comparison", "difference", "differences", "different",
+    "versus", "both",
 )
 MULTI_KEYWORDS: tuple[str, ...] = (
     "并", "同时", "以及", "分别", "各自", "结合", "关系", "联系", "分别",
